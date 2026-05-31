@@ -1,9 +1,0 @@
-{
-  "last_report_path": "/root/.hermes/logs/curator/20260530-093139",
-  "last_run_at": "2026-05-30T09:31:39.963541+00:00",
-  "last_run_duration_seconds": 184.342688,
-  "last_run_summary": "auto: no changes; llm: ---\n\n## Consolidation Summary\n\n**Pass complete.** 2 consolidations performed on 6 agent-created skills.\n\n### What happened:\n\n**Cluster 1: Memory Extensions (2 → 1)**\n- `memory-plugin-embeddings` → merged into `hermes-external-memory-provide…\narchived 2 skill(s):\n  • lark-cli-variant-selector-workaround → feishu-document-content\n  • memory-plugin-embeddings → hermes-external-memory-providers\nfull report: hermes curator status\nkeep an umbrella stable: hermes curator pin feishu-document-content",
-  "last_run_summary_shown_at": "2026-05-23T09:15:01.503566+00:00",
-  "paused": false,
-  "run_count": 1
-}

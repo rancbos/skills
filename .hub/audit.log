@@ -1,8 +1,0 @@
-2026-05-26T00:12:49Z INSTALL web-access clawhub:community safe sha256:370a9b4776bacc90
-2026-05-26T07:54:38Z BLOCKED skill-cleaner clawhub:community dangerous 2_findings
-2026-05-26T08:41:10Z BLOCKED skill-cleaner skills.sh:community caution 2_findings
-2026-05-26T08:41:25Z INSTALL skill-cleaner skills.sh:community caution sha256:a4c466d5ee67b92f
-2026-05-30T07:26:24Z BLOCKED browser-use clawhub:community caution 1_findings
-2026-05-30T07:28:25Z BLOCKED browser-use clawhub:community caution 1_findings
-2026-05-30T07:37:00Z BLOCKED browser-use clawhub:community caution 1_findings
-2026-05-30T07:39:10Z INSTALL browser-use clawhub:community caution sha256:8bb2f140afff9abc
