@@ -72,3 +72,39 @@
 # Ignore git internal and config files
 .usage.json
 .bundled_manifest
+
+# Ignore symlinks to .agents/skills (these are files, not directories)
+lark-approval
+lark-apps
+lark-attendance
+lark-base
+lark-calendar
+lark-contact
+lark-doc
+lark-drive
+lark-event
+lark-im
+lark-mail
+lark-markdown
+lark-minutes
+lark-okr
+lark-openapi-explorer
+lark-shared
+lark-sheets
+lark-skill-maker
+lark-slides
+lark-task
+lark-vc
+lark-vc-agent
+lark-whiteboard
+lark-wiki
+lark-workflow-meeting-summary
+lark-workflow-standup-report
+mmx-cli
+
+# Ignore other hidden directories and files
+.archive/
+.curator_backups/
+.curator_state
+.hub/
+.usage.json.lock
