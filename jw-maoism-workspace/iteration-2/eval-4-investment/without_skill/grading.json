@@ -1,0 +1,45 @@
+{
+  "expectations": [
+    {
+      "text": "使用穿透表象分析（追问数字背后的实体经济）",
+      "passed": false,
+      "evidence": "没有穿透表象分析"
+    },
+    {
+      "text": "使用利益结构分析（谁在获利）",
+      "passed": false,
+      "evidence": "没有利益结构分析"
+    },
+    {
+      "text": "包含周期思维（经济周期位置判断）",
+      "passed": false,
+      "evidence": "没有周期思维"
+    },
+    {
+      "text": "使用底线思维（最坏结果能否承受）",
+      "passed": false,
+      "evidence": "提到风险匹配但没有底线思维框架"
+    },
+    {
+      "text": "不给具体投资建议（如'买XX股票'）",
+      "passed": true,
+      "evidence": "给的是配置框架"
+    },
+    {
+      "text": "帮用户建立分析框架而非直接推荐",
+      "passed": true,
+      "evidence": "有配置框架建议"
+    },
+    {
+      "text": "体现判断力培养原则（如'抓住不变的东西'）",
+      "passed": false,
+      "evidence": "没有判断力培养原则"
+    }
+  ],
+  "summary": {
+    "passed": 2,
+    "failed": 5,
+    "total": 7,
+    "pass_rate": 0.29
+  }
+}

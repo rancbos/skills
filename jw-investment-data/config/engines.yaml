@@ -1,0 +1,102 @@
+# ═══════════════════════════════════════════════════════════════
+# jw-investment-data — 数据引擎配置 v3.5
+# ═══════════════════════════════════════════════════════════════
+# 优先级: 数字越小越优先，0=禁用
+
+version: "2.8.0"
+
+# ── 密钥 ──────────────────────────────────────────────────
+credentials:
+  tushare_token: "91c2866c4f58890e96323b23ba9fd39391b900b873a0c507ac083bc2"
+
+# ── 引擎优先级 ──────────────────────────────────────────────
+engines:
+  tencent_http:
+    priority: 1
+    enabled: true
+    timeout: 8
+    description: "腾讯 qt.gtimg.cn — A/H股实时行情 curl直连"
+
+  sina_https:
+    priority: 2
+    enabled: true
+    timeout: 8
+    description: "新浪 hq.sinajs.cn — A/H股实时行情+五档盘口（需 Referer）"
+
+  baostock:
+    priority: 3
+    enabled: true
+    timeout: 15
+    description: "证券宝 — A股K线/财务EOD（需login/logout）"
+
+  tushare:
+    priority: 4
+    enabled: true
+    timeout: 15
+    description: "Tushare — A股K线/财务独立源（T+1，需token）"
+
+  akshare:
+    priority: 4
+    enabled: true
+    timeout: 20
+    pagination_max_pages: 20
+    description: "AkShare 1.18 — A股实时行情（腾讯源，首页+翻页兜底）"
+
+  yfinance:
+    priority: 5
+    enabled: true
+    timeout: 15
+    retries: 2
+    description: "Yahoo Finance — 港/美股（需代理，带指数退避重试）"
+
+  efinance:
+    priority: 0  # 禁用 — 东方财富IP被封
+    enabled: false
+    timeout: 10
+    description: "东方财富 — A股行情（本服IP被封，仅代理可用）"
+
+# ── 校验参数 ──────────────────────────────────────────────
+verification:
+  threshold_high: 0.02    # ≤2% → high confidence
+  threshold_medium: 0.05  # ≤5% → medium confidence
+  min_sources_high: 3     # 至少3源才给 high
+
+# ── 输出格式 ──────────────────────────────────────────────
+output:
+  default_format: json           # json | markdown
+  tty_auto_markdown: true        # TTY时自动切换markdown
+  envelope: standard             # standard: {ok, data, meta}
+
+# ── 熔断器（v3.0 新增） ──────────────────────────────────
+breaker:
+  failure_threshold: 3       # 连续失败N次→熔断
+  recovery_timeout: 600      # 熔断600s(10min)后→半开探测
+  half_open_probes: 1        # 半开时允许N次探测
+
+# ── 宏观数据（v3.5 配置化） ──────────────────────────────────
+macro:
+  sources:
+    - baostock         # M0/M1/M2/存贷利率/准备金率
+    - eastmoney        # CPI/PMI/GDP/PPI/M2交叉验证
+    - chinamoney       # LPR 1Y/5Y
+    - worldbank        # 中美GDP/CPI年度背景
+    - jin10_mcp        # 经济日历+美国快讯（Agent侧）
+  verification:
+    min_sources: 2     # 至少2源交叉验证
+    max_discrepancy: 0.03  # 差异≤3%通过
+  cache:
+    m2_ttl_days: 35    # 次月15日发布
+    cpi_ttl_days: 35   # 次月10日发布
+    ppi_ttl_days: 35   # 次月10日发布
+    pmi_ttl_days: 5    # 次月1日发布
+    gdp_ttl_days: 90   # 下季度发布
+    lpr_ttl_days: 25   # 每月20日发布
+    rrr_ttl_days: 90   # 不定期调整
+    rate_ttl_days: 90  # 不定期调整
+    calendar_ttl_days: 1   # 每日更新（Agent侧MCP）
+    worldbank_ttl_days: 365  # 年度数据
+cache:
+  enabled: true
+  ttl_minutes_trading: 5     # 盘中缓存5分钟
+  ttl_minutes_closed: 1440   # 盘后缓存24小时
+  directory: "~/.hermes/cache/jw-investment-data/"

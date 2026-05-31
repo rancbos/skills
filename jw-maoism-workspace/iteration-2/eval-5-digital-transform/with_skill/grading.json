@@ -1,0 +1,45 @@
+{
+  "expectations": [
+    {
+      "text": "使用系统观念分析（画出关联方和连锁反应）",
+      "passed": true,
+      "evidence": "分析了老员工、IT部门、业务部门、老板等多方利益"
+    },
+    {
+      "text": "使用先立后破原则（新方案成熟前不拆旧框架）",
+      "passed": true,
+      "evidence": "先立后破明确出现"
+    },
+    {
+      "text": "使用根据地策略（先在小范围试点）",
+      "passed": true,
+      "evidence": "建议选一个部门做样板"
+    },
+    {
+      "text": "从内因分析老员工抵触原因",
+      "passed": true,
+      "evidence": "分析了利益共识缺失是根因"
+    },
+    {
+      "text": "包含'我判断……'形式的走向判断",
+      "passed": true,
+      "evidence": "'我判断：如果继续现在的推法，你大概率会在6个月内被换掉'"
+    },
+    {
+      "text": "行动方案有具体动作、时间、标准",
+      "passed": true,
+      "evidence": "3步行动方案，1个月时间窗口"
+    },
+    {
+      "text": "不是'加强沟通'这类宏观废话",
+      "passed": true,
+      "evidence": "具体到'找一个部门、一个痛点、做一个月出成果'"
+    }
+  ],
+  "summary": {
+    "passed": 7,
+    "failed": 0,
+    "total": 7,
+    "pass_rate": 1.0
+  }
+}

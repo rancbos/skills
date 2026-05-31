@@ -1,0 +1,133 @@
+#!/usr/bin/env bash
+# ═══════════════════════════════════════════════════════════════
+# jw-data — jw-investment-data 统一入口 v1.0
+# ═══════════════════════════════════════════════════════════════
+# 一个命令，所有投研数据能力。
+#
+# 用法:
+#   jw-data macro all              # 宏观全景
+#   jw-data macro cpi              # CPI
+#   jw-data macro money            # M2+LPR+利率
+#   jw-data macro inflation        # CPI+PPI
+#   jw-data quote 600519           # A股实时行情
+#   jw-data kline 600519 120       # K线(天)
+#   jw-data financial 600519       # 财务报表
+#   jw-data indicators 600519      # 技术指标
+#   jw-data chart 600519           # K线图
+#   jw-data health                 # 全源健康检查
+#   jw-data schema                 # 所有能力自描述
+#
+# 选项:
+#   --force                        传给所有脚本，跳过缓存
+#   --json                         强制 JSON 输出
+#   --md                           强制 Markdown 输出
+# ═══════════════════════════════════════════════════════════════
+
+set -euo pipefail
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+# 解析全局选项
+ARGS=()
+FORMAT_FLAG=""
+FORCE_FLAG=""
+
+for arg in "$@"; do
+    case "$arg" in
+        --force)  FORCE_FLAG="--force" ;;
+        --json)   FORMAT_FLAG="--format json" ;;
+        --md)     FORMAT_FLAG="--format markdown" ;;
+        *)        ARGS+=("$arg") ;;
+    esac
+done
+
+CMD="${ARGS[0]:-}"
+SUB="${ARGS[1]:-}"
+SYMBOL="${ARGS[2]:-}"
+EXTRA="${ARGS[3]:-}"
+
+_py() { python3 "$SCRIPT_DIR/$1" ${FORMAT_FLAG} ${FORCE_FLAG} "${@:2}"; }
+
+case "$CMD" in
+    macro)
+        case "$SUB" in
+            all|cpi|ppi|pmi|gdp|money|rates|lpr|reserve|calendar|growth|inflation)
+                _py fetch_macro.py --category "$SUB"
+                ;;
+            "") _py fetch_macro.py --category all ;;
+            *)  echo "❌ 未知宏观子命令: $SUB" >&2
+                echo "   可用: all, cpi, ppi, pmi, gdp, money, rates, lpr, reserve, calendar, growth, inflation"
+                exit 1 ;;
+        esac
+        ;;
+    quote)
+        [ -z "$SYMBOL" ] && { echo "❌ 缺少股票代码，如: jw-data quote 600519" >&2; exit 1; }
+        _py fetch_market_data.py --category quote --symbol "$SYMBOL"
+        ;;
+    kline)
+        [ -z "$SYMBOL" ] && { echo "❌ 缺少股票代码，如: jw-data kline 600519 120" >&2; exit 1; }
+        DAYS="${EXTRA:-120}"
+        _py fetch_market_data.py --category kline --symbol "$SYMBOL" --start "$(date -d "${DAYS} days ago" +%Y%m%d)"
+        ;;
+    financial)
+        [ -z "$SYMBOL" ] && { echo "❌ 缺少股票代码，如: jw-data financial 600519" >&2; exit 1; }
+        _py fetch_market_data.py --category financial --symbol "$SYMBOL"
+        ;;
+    indicators)
+        [ -z "$SYMBOL" ] && { echo "❌ 缺少股票代码，如: jw-data indicators 600519" >&2; exit 1; }
+        _py technical_indicators.py --symbol "$SYMBOL" --indicators "MA,MACD,RSI,KDJ,BOLL"
+        ;;
+    chart)
+        [ -z "$SYMBOL" ] && { echo "❌ 缺少股票代码，如: jw-data chart 600519" >&2; exit 1; }
+        DAYS="${EXTRA:-120}"
+        _py draw_kline.py --symbol "$SYMBOL" --days "$DAYS"
+        ;;
+    health)
+        _py health_check.py
+        ;;
+    schema)
+        python3 -c "
+import json, sys
+sys.path.insert(0, '$SCRIPT_DIR')
+from format_macro import format_macro
+print(json.dumps({
+    'name': 'jw-data', 'version': '1.0.0',
+    'commands': {
+        'macro {all|cpi|ppi|pmi|gdp|money|rates|lpr|reserve|calendar|growth|inflation}': '宏观数据',
+        'quote <symbol>': 'A股实时行情',
+        'kline <symbol> [days]': '历史K线(默认120天)',
+        'financial <symbol>': '财务报表',
+        'indicators <symbol>': '技术指标(MA/MACD/RSI/KDJ/BOLL)',
+        'chart <symbol> [days]': 'K线图PNG',
+        'health': '全源健康检查',
+    },
+    'options': ['--force 跳过缓存', '--json 强制JSON', '--md 强制Markdown'],
+    'version': '1.0.0'
+}, ensure_ascii=False, indent=2))
+"
+        ;;
+    ""|-h|--help|help)
+        cat << 'EOF'
+══ jw-data — 投研数据统一入口 ══
+
+ jw-data macro all              宏观全景
+ jw-data macro cpi              CPI
+ jw-data macro inflation        CPI+PPI
+ jw-data macro money            M2+LPR+利率
+ jw-data macro growth           GDP+PMI
+ jw-data quote 600519           A股实时行情
+ jw-data kline 600519 120       K线
+ jw-data financial 600519       财报
+ jw-data indicators 600519      技术指标
+ jw-data chart 600519           K线图PNG
+ jw-data health                 全源健康检查
+ jw-data schema                 自描述
+
+ 全局选项: --force --json --md
+EOF
+        ;;
+    *)
+        echo "❌ 未知命令: $CMD" >&2
+        echo "   可用: macro, quote, kline, financial, indicators, chart, health, schema"
+        exit 1
+        ;;
+esac

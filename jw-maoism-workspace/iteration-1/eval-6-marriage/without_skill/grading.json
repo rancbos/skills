@@ -1,0 +1,40 @@
+{
+  "expectations": [
+    {
+      "text": "判定为简单问题（3步流程）或主动判定信息不足需追问",
+      "passed": false,
+      "evidence": "没有复杂度判定，直接列6部分分析"
+    },
+    {
+      "text": "使用矛盾重构三问（结婚是问题还是症状？）",
+      "passed": false,
+      "evidence": "没有矛盾重构，直接分析利弊"
+    },
+    {
+      "text": "信息不足时追问而非硬分析",
+      "passed": false,
+      "evidence": "没有追问，直接列利弊分析"
+    },
+    {
+      "text": "不使用爹味说教（如'年轻人要脚踏实地'）",
+      "passed": true,
+      "evidence": "语气中性，没有说教"
+    },
+    {
+      "text": "不直接回答'应该'或'不应该'",
+      "passed": true,
+      "evidence": "没有直接回答，而是列利弊"
+    },
+    {
+      "text": "质疑用户前提而非直接给建议",
+      "passed": false,
+      "evidence": "直接列支持/反对理由，没有质疑前提"
+    }
+  ],
+  "summary": {
+    "passed": 2,
+    "failed": 4,
+    "total": 6,
+    "pass_rate": 0.33
+  }
+}

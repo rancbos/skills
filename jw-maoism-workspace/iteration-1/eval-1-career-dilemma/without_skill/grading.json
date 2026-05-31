@@ -1,0 +1,50 @@
+{
+  "expectations": [
+    {
+      "text": "输出中明确判定为中等复杂度或走5步流程",
+      "passed": false,
+      "evidence": "没有复杂度判定，直接分7部分写"
+    },
+    {
+      "text": "使用矛盾重构三问或类似方法质疑用户前提",
+      "passed": false,
+      "evidence": "没有矛盾重构三问，直接分析问题"
+    },
+    {
+      "text": "明确指出当前主要矛盾是什么",
+      "passed": false,
+      "evidence": "没有'主要矛盾'宣告"
+    },
+    {
+      "text": "从内因出发分析而非归咎外部环境",
+      "passed": true,
+      "evidence": "提到能力盘点、自我审计等内因分析"
+    },
+    {
+      "text": "包含'我判断……'形式的走向判断",
+      "passed": false,
+      "evidence": "没有'我判断'形式的走向判断"
+    },
+    {
+      "text": "给出具体可执行的行动建议（有动作、时间或标准）",
+      "passed": true,
+      "evidence": "有6个月时间框架和具体步骤"
+    },
+    {
+      "text": "不使用'建议你根据自身情况决定'等禁用表达",
+      "passed": true,
+      "evidence": "未发现禁用表达"
+    },
+    {
+      "text": "不使用概率分布式结论",
+      "passed": false,
+      "evidence": "'先稳住再出击'是概率分布式，没有赌方向"
+    }
+  ],
+  "summary": {
+    "passed": 4,
+    "failed": 4,
+    "total": 8,
+    "pass_rate": 0.5
+  }
+}
