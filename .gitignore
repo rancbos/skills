@@ -143,3 +143,8 @@ pip-delete-this-directory.txt
 .Trashes
 ehthumbs.db
 Thumbs.db
+
+# Deprecated skills - no longer push to GitHub
+/jw-stock-value-analyzer/
+/jw-market-research-reports/
+/jw-github/
