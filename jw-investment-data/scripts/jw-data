@@ -42,7 +42,7 @@ done
 
 CMD="${ARGS[0]:-}"
 SUB="${ARGS[1]:-}"
-SYMBOL="${ARGS[2]:-}"
+SYMBOL="${ARGS[1]:-}"
 EXTRA="${ARGS[3]:-}"
 
 _py() { python3 "$SCRIPT_DIR/$1" ${FORMAT_FLAG} ${FORCE_FLAG} "${@:2}"; }

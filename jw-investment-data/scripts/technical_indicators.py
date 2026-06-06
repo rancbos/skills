@@ -243,7 +243,7 @@ def _format_markdown(symbol: str, indicators: Dict, n_rows: int, latency_ms: int
     lines.append("📊 **数据来源**: Baostock (证券宝) — A股EOD行情")
     lines.append(f"⏱️ **数据时间**: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')} CST")
     lines.append(f"📡 **市场状态**: {mt['state']} | 交易日: {'是' if mt['is_trading_day'] else '否'}")
-    lines.append("🔧 **分析工具**: jw-investment-data v" + VERSION)
+    lines.append("🔧 **分析工具**: jw-investment-data v" + __version__)
     lines.append("⚠️ *技术指标仅供参考，不构成投资建议*")
     return "\n".join(lines)
 

@@ -1,8 +1,10 @@
 ---
 name: jw-ebook-organizer
-description: This skill should be used when the user wants to organize, sort, classify, or tidy up ebook files (pdf/epub/mobi/azw3) on their computer into category folders. 触发词：整理电子书、归类电子书、图书分类、整理本地图书、电子书归档。It handles scanning a directory for ebook files (including incremental mode), cleaning messy filenames, performing web searches to determine each book's CLC subject area and author, classifying into a multi-level CLC hierarchy (29 subcategories), moving files with multi-format merging and author grouping, generating a human-readable Markdown index, and providing undo/rollback support. Do not use for non-ebook files (images, documents, audio).
+description: This skill should be used when the user wants to organize, sort, classify, or tidy up ebook files (pdf/epub/mobi/azw3) on their computer into category folders. 触发词：整理电子书、归类电子书、图书分类、整理本地图书、电子书归档。英文触发词：organize ebooks, classify books, sort library, tidy up ebooks. It handles scanning a directory for ebook files (including incremental mode), cleaning messy filenames, performing web searches to determine each book's CLC subject area and author, classifying into a multi-level CLC hierarchy (29 subcategories), moving files with multi-format merging and author grouping, generating a human-readable Markdown index, and providing undo/rollback support. Do not use for non-ebook files (images, documents, audio).
 agent_created: true
 ---
+
+IRON LAW: 始终先dry-run确认，再执行实际移动操作。任何文件操作必须可回滚（保留.move_manifest.json）。
 
 # Ebook Organizer (JW 定制版)
 
@@ -73,6 +75,8 @@ python <skill_dir>/scripts/ebook_ops.py clean-titles scan_result.json -o cleaned
 
 #### 3b. 联网查询分类 + 作者国籍
 
+> **注意**：在进行分类前，先加载 `references/clc-categories.md` 获取完整的 CLC 分类表。
+
 逐个（或分批）对清洗后的书名进行联网搜索，查证该书的**学科归属**和**作者国籍**。
 
 **批量说明**：若文件数 > 50，建议分批搜索（每批 20-30 本），告知用户预计搜索次数和耗时；若文件数 > 200，在开始前询问用户是否确认执行全量搜索。
@@ -118,51 +122,7 @@ python <skill_dir>/scripts/ebook_ops.py clean-titles scan_result.json -o cleaned
 
 > 特殊处理：作者为国人的（中国），国籍标注 `中国`；作者不明或搜索不到国籍的，仅保留 `书名-作者` 形式；完全查不到作者信息的，不重命名。
 
-**参考分类表**（29 个 CLC 多级类目，重点展开 F/B/K/I 大类）：
-
-| CLC 代码 | 文件夹名 | 典型书籍主题/关键词 |
-|----------|---------|-------------------|
-| B0 | `B0-哲学理论` | 哲学理论、本体论、认识论、辩证法 |
-| B1 | `B1-西方哲学` | 亚里士多德、柏拉图、康德、尼采、黑格尔 |
-| B2 | `B2-中国哲学` | 论语、王阳明、儒家、道家、禅宗、周易 |
-| B80 | `B80-思维科学` | 底层逻辑、方法论、心智模型、系统思考、批判性思维 |
-| B84 | `B84-心理学` | 乌合之众、社会心理、认知偏误、同理心、自控 |
-| B9 | `B9-宗教` | 佛教、基督教、伊斯兰教、信仰 |
-| C | `C-社会科学总论` | 社会学、统计学、社交、沟通、谈判、影响力 |
-| C93 | `C93-管理学` | 管理理论、领导力、德鲁克、明茨伯格 |
-| D | `D-政治法律` | 政治、法律、政府治理、社会制度、乡村政治 |
-| F0 | `F0-经济学` | 经济学原理、曼昆、凯恩斯、宏观、微观 |
-| F1 | `F1-中国经济` | 林毅夫、黄奇帆、双循环、改革、现代化 |
-| F2 | `F2-经济管理` | 竞争战略、波特、商业模式、创业、创新 |
-| F7 | `F7-贸易` | 贸易经济、外贸、跨境电商、全球化 |
-| **F81** | **`F81-财政金融`** | **财政、货币、银行、债券、利率、汇率** |
-| **F83** | **`F83-金融投资`** | **巴菲特、价值投资、股票、基金、财报、护城河、复利** |
-| **F83** | **`F83-证券交易`** | **K线、技术分析、价格行为、外汇、短线、缠论、量化** |
-| F84 | `F84-保险` | 保险、社保、养老、寿险 |
-| G | `G-文化教育` | 文化研究、教育、阅读、写作、传媒 |
-| H | `H-语言文字` | 语言学、汉语、英语、语法、修辞 |
-| **I24** | **`I24-小说`** | **三体、追风筝的人、围城、科幻、武侠、推理** |
-| I26 | `I26-散文` | 散文、随笔、瓦尔登湖 |
-| I | `I-文学` | 诗歌、文学理论、戏剧、文学史 |
-| **K0** | **`K0-史学理论`** | **史学理论、历史哲学** |
-| **K1** | **`K1-世界史`** | **世界史、欧洲史、文明史** |
-| **K2** | **`K2-中国史`** | **中国史、八次危机、革命史、制度史** |
-| K81 | `K81-传记` | 人物传记、自传、回忆录 |
-| R | `R-医药卫生` | 医学、健康、营养、中医、养生 |
-| TP | `TP-计算机技术` | 编程、AI、Python、算法、架构 |
-| Z | `Z-综合性图书` | 百科全书、手册、**无法归类的书籍** |
-
-> 中图法基本大类（全）：A 马列主义 | B 哲学 | C 社科总论 | D 政治法律 | E 军事 | F 经济 | G 文教 | H 语言 | I 文学 | J 艺术 | K 历史地理 | N 自科总论 | O 数理化学 | P 天文 | Q 生物 | R 医药 | S 农业 | T 工业技术 | U 交通 | V 航空 | X 环境 | Z 综合
-
-**分类原则（依中图法精神）：**
-- 优先通过联网搜索确认图书的学科分类
-- 按图书内容的**学科属性**归类，而非按用途或个人偏好分类
-- 《聪明的投资者》→ F83 金融投资（证券投资），而非归入"自助"类
-- 《竞争优势》→ F2 经济管理（企业竞争战略）
-- 系列套书按套装的主题归入最合适的单一类别
-- 多学科交叉的书籍，选择其**主要论述方向**归类
-- 联网搜索也查不到明确分类的，用 LLM 基于书名关键词做最佳匹配推断
-- 实在无法分类的（包括网络搜索无结果且关键字无法匹配的），归入 `Z-综合性图书`
+**分类依据**：采用中国图书馆图书分类法（CLC/中图法）。详见 `references/clc-categories.md`。
 
 **输出分类计划 JSON**，新版格式（含重命名信息）：
 
@@ -206,25 +166,16 @@ python <skill_dir>/scripts/ebook_ops.py clean-titles scan_result.json -o cleaned
 ```
 F:\图书馆\
 ├── F83-金融投资\
-│   ├── 国富论-英国·亚当·斯密.pdf               ← 单格式，放根目录
-│   └── 本杰明·格雷厄姆\                         ← 作者(多书)→子文件夹
-│       └── 聪明的投资者-本杰明·格雷厄姆\         ← 多格式→子文件夹
-│           ├── 聪明的投资者-美国·本杰明·格雷厄姆.epub
-│           ├── 聪明的投资者-美国·本杰明·格雷厄姆.mobi
-│           ├── 聪明的投资者-美国·本杰明·格雷厄姆.pdf
-│           └── 聪明的投资者-美国·本杰明·格雷厄姆_1.pdf  ← 不同版本
-├── F83-证券交易\
-│   └── 裸K线交易法-中国·许佳聪.pdf              ← 单格式，根目录
+│   ├── 国富论-英国·亚当·斯密.pdf
+│   └── 本杰明·格雷厄姆\
+│       └── 聪明的投资者-本杰明·格雷厄姆\
 ├── B84-心理学\
-│   └── 但斌\                                    ← 作者(2书)→子文件夹
-│       ├── 巴菲特传-中国·但斌.pdf
-│       └── 价值投资-中国·但斌.pdf
+│   └── 但斌\
 └── I24-小说\
-    └── 刘慈欣\                                  ← 作者(多书)→子文件夹
-        ├── 三体-中国·刘慈欣/
-        │   ├── 三体-中国·刘慈欣.epub
-        │   └── 三体-中国·刘慈欣.pdf
-        └── 流浪地球-中国·刘慈欣.pdf
+    └── 刘慈欣\
+```
+
+> 完整的目录结构示例详见 `references/directory-structure.md`。
 
 将分类计划保存为 `classify_plan.json`。
 
@@ -351,7 +302,6 @@ python <skill_dir>/scripts/ebook_ops.py clean-source "<目标目录>"
 ### 脚本命令速查
 
 ```bash
-# 完整路径（替换 <skill_dir> 为此目录）
 SKILL_DIR="$HOME/.hermes/skills/jw-ebook-organizer"
 
 # 扫描
@@ -370,12 +320,7 @@ python "$SKILL_DIR/scripts/ebook_ops.py" move classify_plan.json --copy
 python "$SKILL_DIR/scripts/ebook_ops.py" undo --dry-run
 python "$SKILL_DIR/scripts/ebook_ops.py" undo
 
-# 清理 .source
-python "$SKILL_DIR/scripts/ebook_ops.py" clean-source "<目录>" --dry-run
-python "$SKILL_DIR/scripts/ebook_ops.py" clean-source "<目录>"
-
-# 报告 & 索引
-python "$SKILL_DIR/scripts/ebook_ops.py" report "<目录>" -o report.json
+# 索引
 python "$SKILL_DIR/scripts/ebook_ops.py" index "<目录>" --output "图书索引.md"
 ```
 
@@ -391,10 +336,32 @@ python "$SKILL_DIR/scripts/ebook_ops.py" index "<目录>" --output "图书索引
 | `.move_manifest.json` | move | 保留（undo 依赖） |
 | `图书索引.md` | Step 6 | 保留（最终交付物） |
 
+**操作原则**：
 1. **强烈建议先在 dry-run 模式验证**，确认分类正确后再执行实际移动
 2. 同名文件冲突时，脚本会自动添加数字后缀（`书名_1.pdf`）
 3. 操作范围限定在用户指定的目录内，不会触及系统目录
 4. 如果用户只想复制而不是移动，在 Step 5 询问用户意见
+
+## Anti-Patterns（强制阅读）
+
+1. **跳过dry-run**：直接执行move命令，导致文件移动错误无法回滚
+2. **手动移动文件**：不使用脚本而手动移动，破坏目录结构和索引一致性
+3. **忽略搜索缓存**：对同一书名重复联网搜索，浪费时间和API配额
+4. **批量处理不确认**：文件数>200时未询问用户确认，直接执行全量搜索
+5. **不清洗书名**：直接使用原始文件名分类，导致分类不准确（作者名、出版社信息干扰）
+
+## Pre-Delivery Checklist（交付前检查）
+
+在完成整理后，必须验证以下项目：
+
+- [ ] 所有文件已成功移动（无错误文件）
+- [ ] 索引文档已生成且内容正确
+- [ ] 无重复文件（同一书名的多个副本）
+- [ ] 分类正确（抽样检查 5-10 本）
+- [ ] 文件名格式符合规范（书名-国籍·作者.扩展名）
+- [ ] 目录结构符合预期（分类/作者/书名）
+- [ ] 临时文件已清理（scan_result.json 等）
+- [ ] 用户确认整理结果
 
 ## 异常与边界条件
 

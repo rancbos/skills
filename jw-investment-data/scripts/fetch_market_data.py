@@ -189,23 +189,133 @@ def _baostock_kline(symbol: str, start: str, end: str = None) -> Optional[Dict]:
 
 
 def _baostock_financial(symbol: str) -> Optional[Dict]:
+    """baostock 多维财务数据：5年×4季 profit+balance+cashflow+dupont+growth"""
     import baostock as bs
+    from datetime import datetime
     prefix = "sh." if symbol.startswith(("6","9")) else "sz."
+    code = prefix + symbol
+    current_year = datetime.now().year
+
+    def _query(fn, fields):
+        """查询多季度数据，返回 [{statDate, field1, field2, ...}]"""
+        rows = []
+        for y in range(current_year - 4, current_year + 1):
+            for q in range(1, 5):
+                try:
+                    rs = fn(code, year=y, quarter=q)
+                    if rs.error_code == '0':
+                        vals = rs.get_row_data()
+                        if vals and len(vals) >= len(fields):
+                            row = {f: (float(v) if v and f not in ("pubDate","statDate","code") else v)
+                                   for f, v in zip(fields, vals) if v}
+                            if row.get("statDate"):
+                                rows.append(row)
+                except Exception:
+                    pass
+        return rows
+
     old_stdout = sys.stdout
     devnull = open(os.devnull, 'w')
     try:
         sys.stdout = devnull
         bs.login()
         sys.stdout = old_stdout
-        rs = bs.query_profit_data(prefix+symbol, year=2025, quarter=4)
-        row = rs.get_row_data() if rs.error_code == '0' else []
+
+        # 1) 利润表
+        profit_fields = ["code","pubDate","statDate","roeAvg","npMargin","gpMargin",
+                         "netProfit","epsTTM","MBRevenue","totalShare","liqaShare"]
+        profit_rows = _query(bs.query_profit_data, profit_fields)
+
+        # 2) 资产负债表
+        balance_fields = ["code","pubDate","statDate","currentRatio","quickRatio",
+                          "cashRatio","YOYLiability","liabilityToAsset","assetToEquity"]
+        balance_rows = _query(bs.query_balance_data, balance_fields)
+
+        # 3) 现金流量表
+        cashflow_fields = ["code","pubDate","statDate","CAToAsset","NCAToAsset",
+                           "tangibleAssetToAsset","ebitToInterest","CFOToOR",
+                           "CFOToNP","CFOToGr"]
+        cashflow_rows = _query(bs.query_cash_flow_data, cashflow_fields)
+
+        # 4) 成长能力
+        growth_fields = ["code","pubDate","statDate","YOYEquity","YOYAsset",
+                         "YOYNI","YOYEPSBasic","YOYPNI"]
+        growth_rows = _query(bs.query_growth_data, growth_fields)
+
+        # 5) 杜邦分析
+        dupont_fields = ["code","pubDate","statDate","dupontROE","dupontAssetSto498",
+                         "dupontAssetTurn","dupontPnitoni","dupontNitogr",
+                         "dupontTaxnint","dupontIntoni","dupontEbitoni"]
+        dupont_rows = _query(bs.query_dupont_data, dupont_fields)
+
+        # 6) 分红数据
+        dividend_rows = []
+        for y in range(current_year - 4, current_year + 1):
+            try:
+                rs = bs.query_dividend_data(code, year=y, yearType="report")
+                if rs.error_code == '0':
+                    while rs.next():
+                        vals = rs.get_row_data()
+                        if vals:
+                            dividend_rows.append(vals)
+            except Exception:
+                pass
+
         sys.stdout = devnull
         bs.logout()
         sys.stdout = old_stdout
-        return {"raw": row, "source": "baostock"} if row else None
-    finally:
+
+        if not profit_rows:
+            return None
+
+        # 提取最新一期关键指标用于顶层摘要
+        latest = profit_rows[-1] if profit_rows else {}
+        latest_balance = balance_rows[-1] if balance_rows else {}
+        latest_cashflow = cashflow_rows[-1] if cashflow_rows else {}
+
+        return {
+            "summary": {
+                "latest_period": latest.get("statDate"),
+                "revenue": latest.get("MBRevenue"),
+                "net_profit": latest.get("netProfit"),
+                "roe": latest.get("roeAvg"),
+                "gross_margin": latest.get("gpMargin"),
+                "net_margin": latest.get("npMargin"),
+                "eps_ttm": latest.get("epsTTM"),
+                "current_ratio": latest_balance.get("currentRatio"),
+                "liability_to_asset": latest_balance.get("liabilityToAsset"),
+                "cfo_to_np": latest_cashflow.get("CFOToNP"),
+                "cfo_to_or": latest_cashflow.get("CFOToOR"),
+            },
+            "profit": profit_rows,
+            "balance": balance_rows,
+            "cashflow": cashflow_rows,
+            "growth": growth_rows,
+            "dupont": dupont_rows,
+            "dividend_raw": dividend_rows,
+            "source": "baostock",
+            "row_counts": {
+                "profit": len(profit_rows),
+                "balance": len(balance_rows),
+                "cashflow": len(cashflow_rows),
+                "growth": len(growth_rows),
+                "dupont": len(dupont_rows),
+                "dividend": len(dividend_rows),
+            }
+        }
+    except Exception as e:
+        try:
+            sys.stdout = devnull
+            bs.logout()
+        except Exception:
+            pass
         sys.stdout = old_stdout
-        devnull.close()
+        return None
+    finally:
+        try: sys.stdout = old_stdout
+        except: pass
+        try: devnull.close()
+        except: pass
 
 
 # ═══════════════════════════════ 引擎 3: AkShare 1.18 ═══════════════
@@ -659,6 +769,649 @@ def fetch_financial(symbol: str) -> Dict:
     return {"results": {"baostock": b} if b else {}, "errors": [] if b else ["baostock 无数据"]}
 
 
+def _baostock_profile(symbol: str) -> Optional[Dict]:
+    """baostock 公司概况：基本信息 + 行业分类 + 最近4季财务摘要"""
+    import baostock as bs
+    from datetime import datetime
+    prefix = "sh." if symbol.startswith(("6","9")) else "sz."
+    code = prefix + symbol
+    old_stdout = sys.stdout
+    devnull = open(os.devnull, 'w')
+    try:
+        sys.stdout = devnull
+        bs.login()
+        sys.stdout = old_stdout
+
+        # 1) 基本信息
+        rs = bs.query_stock_basic(code=code)
+        basic = {}
+        if rs.error_code == '0':
+            while rs.next():
+                vals = rs.get_row_data()
+                if vals and len(vals) >= 6:
+                    basic = {"code": vals[0], "name": vals[1], "ipo_date": vals[2],
+                             "out_date": vals[3], "type": vals[4], "status": vals[5]}
+                    break
+
+        # 2) 行业分类
+        rs2 = bs.query_stock_industry(code=code)
+        industry = {}
+        if rs2.error_code == '0':
+            while rs2.next():
+                vals = rs2.get_row_data()
+                if vals and len(vals) >= 4:
+                    industry = {"update_date": vals[0], "code": vals[1],
+                                "industry_code": vals[2], "industry_name": vals[3]}
+                    break
+
+        # 3) 最近4季盈利摘要
+        current_year = datetime.now().year
+        recent_profit = []
+        for y in [current_year, current_year - 1]:
+            for q in range(4, 0, -1):
+                try:
+                    rs3 = bs.query_profit_data(code, year=y, quarter=q)
+                    if rs3.error_code == '0':
+                        vals = rs3.get_row_data()
+                        if vals and len(vals) >= 9:
+                            recent_profit.append({
+                                "period": f"{y}Q{q}",
+                                "roe": float(vals[3]) if vals[3] else None,
+                                "gross_margin": float(vals[5]) if vals[5] else None,
+                                "net_margin": float(vals[4]) if vals[4] else None,
+                                "net_profit": float(vals[6]) if vals[6] else None,
+                                "eps_ttm": float(vals[7]) if vals[7] else None,
+                                "revenue": float(vals[8]) if vals[8] else None,
+                            })
+                            if len(recent_profit) >= 4:
+                                break
+                except Exception:
+                    pass
+            if len(recent_profit) >= 4:
+                break
+
+        sys.stdout = devnull
+        bs.logout()
+        sys.stdout = old_stdout
+
+        return {
+            "basic": basic,
+            "industry": industry,
+            "recent_quarters": recent_profit,
+            "source": "baostock"
+        }
+    except Exception:
+        try:
+            sys.stdout = devnull; bs.logout()
+        except Exception:
+            pass
+        sys.stdout = old_stdout
+        return None
+    finally:
+        try: sys.stdout = old_stdout
+        except: pass
+        try: devnull.close()
+        except: pass
+
+
+def fetch_profile(symbol: str) -> Dict:
+    """公司概况：基本信息 + 行业分类 + 最近财务摘要"""
+    b = _baostock_profile(symbol)
+    return {"results": {"baostock": b} if b else {}, "errors": [] if b else ["baostock 无数据"]}
+
+
+# ═══════════════════════════════ 引擎 9: adata 财务核心指标 ═══════════════
+def _adata_financial(symbol: str) -> Optional[Dict]:
+    """adata 财务核心指标：多年×43列完整财务数据"""
+    try:
+        import adata
+        df = adata.stock.finance.get_core_index(stock_code=symbol)
+        if df is None or df.empty:
+            return None
+        # 按报告日期排序，最新在后
+        df = df.sort_values('report_date')
+        # 转为字典列表（只保留最近20期，避免数据过大）
+        cols_keep = [c for c in df.columns if c not in ['stock_code', 'short_name']]
+        rows = df[cols_keep].tail(20).to_dict('records')
+        # 提取最新一期摘要
+        latest = rows[-1] if rows else {}
+        return {
+            "summary": {
+                "latest_period": latest.get("report_date"),
+                "report_type": latest.get("report_type"),
+                "basic_eps": latest.get("basic_eps"),
+                "net_asset_ps": latest.get("net_asset_ps"),
+                "total_rev": latest.get("total_rev"),
+                "net_profit": latest.get("net_profit_attr_sh"),
+                "roe": latest.get("roe_wtd"),
+                "gross_margin": latest.get("gross_margin"),
+                "net_margin": latest.get("net_margin"),
+                "oper_cf_ps": latest.get("oper_cf_ps"),
+                "asset_liab_ratio": latest.get("asset_liab_ratio"),
+                "curr_ratio": latest.get("curr_ratio"),
+                "quick_ratio": latest.get("quick_ratio"),
+                "total_rev_yoy": latest.get("total_rev_yoy_gr"),
+                "net_profit_yoy": latest.get("net_profit_yoy_gr"),
+            },
+            "rows": rows,
+            "row_count": len(rows),
+            "columns": list(cols_keep),
+            "source": "adata"
+        }
+    except Exception as e:
+        return None
+
+
+# ═══════════════════════════════ 引擎 10: baostock 业绩预告/快报/营运 ═══════════════
+def _baostock_forecast(symbol: str) -> Optional[Dict]:
+    """baostock 业绩预告"""
+    import baostock as bs
+    prefix = "sh." if symbol.startswith(("6","9")) else "sz."
+    code = prefix + symbol
+    old_stdout = sys.stdout
+    devnull = open(os.devnull, 'w')
+    try:
+        sys.stdout = devnull; bs.login(); sys.stdout = old_stdout
+        rs = bs.query_forecast_report(code, start_date='2024-01-01', end_date='2027-01-01')
+        rows = []
+        if rs.error_code == '0':
+            while rs.next():
+                vals = rs.get_row_data()
+                if vals and len(vals) >= 7:
+                    rows.append({
+                        "code": vals[0], "pub_date": vals[1], "stat_date": vals[2],
+                        "type": vals[3], "abstract": vals[4],
+                        "chg_pct_up": vals[5], "chg_pct_down": vals[6]
+                    })
+        sys.stdout = devnull; bs.logout(); sys.stdout = old_stdout
+        return {"rows": rows, "count": len(rows), "source": "baostock"} if rows else None
+    except Exception:
+        try: sys.stdout = devnull; bs.logout()
+        except: pass
+        sys.stdout = old_stdout
+        return None
+    finally:
+        try: sys.stdout = old_stdout
+        except: pass
+        try: devnull.close()
+        except: pass
+
+
+def _baostock_express(symbol: str) -> Optional[Dict]:
+    """baostock 业绩快报"""
+    import baostock as bs
+    prefix = "sh." if symbol.startswith(("6","9")) else "sz."
+    code = prefix + symbol
+    old_stdout = sys.stdout
+    devnull = open(os.devnull, 'w')
+    try:
+        sys.stdout = devnull; bs.login(); sys.stdout = old_stdout
+        rs = bs.query_performance_express_report(code, start_date='2024-01-01', end_date='2027-01-01')
+        rows = []
+        if rs.error_code == '0':
+            fields = rs.fields if hasattr(rs, 'fields') else []
+            while rs.next():
+                vals = rs.get_row_data()
+                if vals and len(vals) >= 11:
+                    rows.append({
+                        "code": vals[0], "pub_date": vals[1], "stat_date": vals[2],
+                        "update_date": vals[3], "total_asset": vals[4], "net_asset": vals[5],
+                        "eps_chg_pct": vals[6], "roe": vals[7], "eps": vals[8],
+                        "rev_yoy": vals[9], "op_yoy": vals[10]
+                    })
+        sys.stdout = devnull; bs.logout(); sys.stdout = old_stdout
+        return {"rows": rows, "count": len(rows), "source": "baostock"} if rows else None
+    except Exception:
+        try: sys.stdout = devnull; bs.logout()
+        except: pass
+        sys.stdout = old_stdout
+        return None
+    finally:
+        try: sys.stdout = old_stdout
+        except: pass
+        try: devnull.close()
+        except: pass
+
+
+def _baostock_operation(symbol: str) -> Optional[Dict]:
+    """baostock 营运能力（应收周转/存货周转/资产周转）"""
+    import baostock as bs
+    from datetime import datetime
+    prefix = "sh." if symbol.startswith(("6","9")) else "sz."
+    code = prefix + symbol
+    current_year = datetime.now().year
+    old_stdout = sys.stdout
+    devnull = open(os.devnull, 'w')
+    try:
+        sys.stdout = devnull; bs.login(); sys.stdout = old_stdout
+        rows = []
+        for y in range(current_year - 2, current_year + 1):
+            for q in range(1, 5):
+                try:
+                    rs = bs.query_operation_data(code, year=y, quarter=q)
+                    if rs.error_code == '0':
+                        vals = rs.get_row_data()
+                        if vals and len(vals) >= 9:
+                            rows.append({
+                                "code": vals[0], "pub_date": vals[1], "stat_date": vals[2],
+                                "nr_turn_ratio": float(vals[3]) if vals[3] else None,
+                                "nr_turn_days": float(vals[4]) if vals[4] else None,
+                                "inv_turn_ratio": float(vals[5]) if vals[5] else None,
+                                "inv_turn_days": float(vals[6]) if vals[6] else None,
+                                "ca_turn_ratio": float(vals[7]) if vals[7] else None,
+                                "asset_turn_ratio": float(vals[8]) if vals[8] else None,
+                            })
+                except Exception:
+                    pass
+        sys.stdout = devnull; bs.logout(); sys.stdout = old_stdout
+        return {"rows": rows, "count": len(rows), "source": "baostock"} if rows else None
+    except Exception:
+        try: sys.stdout = devnull; bs.logout()
+        except: pass
+        sys.stdout = old_stdout
+        return None
+    finally:
+        try: sys.stdout = old_stdout
+        except: pass
+        try: devnull.close()
+        except: pass
+
+
+def _adata_shares(symbol: str) -> Optional[Dict]:
+    """adata 股本结构变动"""
+    try:
+        import adata
+        df = adata.stock.info.get_stock_shares(stock_code=symbol)
+        if df is None or df.empty:
+            return None
+        rows = df.to_dict('records')
+        return {"rows": rows, "count": len(rows), "source": "adata"}
+    except Exception:
+        return None
+
+
+def _adata_concept(symbol: str) -> Optional[Dict]:
+    """adata 概念板块"""
+    try:
+        import adata
+        df = adata.stock.info.get_concept_east(stock_code=symbol)
+        if df is None or df.empty:
+            return None
+        rows = df.to_dict('records')
+        return {"rows": rows, "count": len(rows), "source": "adata"}
+    except Exception:
+        return None
+
+
+def _adata_plate(symbol: str) -> Optional[Dict]:
+    """adata 行业/板块/概念归属（东方财富）"""
+    try:
+        import adata
+        df = adata.stock.info.get_plate_east(stock_code=symbol)
+        if df is None or df.empty:
+            return None
+        rows = df.to_dict('records')
+        return {"rows": rows, "count": len(rows), "source": "adata"}
+    except Exception:
+        return None
+
+
+def _adata_north_flow() -> Optional[Dict]:
+    """adata 北向资金30日净流入（沪股通/深股通/合计）"""
+    try:
+        import adata
+        df = adata.sentiment.north.north_flow()
+        if df is None or df.empty:
+            return None
+        df = df.sort_values('trade_date')
+        rows = df.tail(30).to_dict('records')
+        latest = rows[-1] if rows else {}
+        return {
+            "summary": {
+                "latest_date": latest.get("trade_date"),
+                "net_hgt": latest.get("net_hgt"),
+                "net_sgt": latest.get("net_sgt"),
+                "net_tgt": latest.get("net_tgt"),
+            },
+            "rows": rows,
+            "count": len(rows),
+            "source": "adata"
+        }
+    except Exception:
+        return None
+
+
+def _adata_stock_lifting() -> Optional[Dict]:
+    """adata 当月解禁股数据"""
+    try:
+        import adata
+        df = adata.sentiment.stock_lifting_last_month()
+        if df is None or df.empty:
+            return None
+        rows = df.to_dict('records')
+        return {"rows": rows, "count": len(rows), "source": "adata"}
+    except Exception:
+        return None
+
+
+def _adata_popularity() -> Optional[Dict]:
+    """adata 东方财富人气榜TOP100"""
+    try:
+        import adata
+        df = adata.sentiment.hot.pop_rank_100_east()
+        if df is None or df.empty:
+            return None
+        rows = df.to_dict('records')
+        return {"rows": rows, "count": len(rows), "source": "adata"}
+    except Exception:
+        return None
+
+
+def _adata_index_membership(symbol: str) -> Optional[Dict]:
+    """adata 判断个股是否纳入主要指数（沪深300/中证500等）"""
+    try:
+        import adata
+        indices = {"000300": "沪深300", "000905": "中证500", "000016": "上证50", "399006": "创业板指"}
+        membership = []
+        for idx_code, idx_name in indices.items():
+            try:
+                df = adata.stock.info.index_constituent(index_code=idx_code)
+                if df is not None and not df.empty:
+                    if symbol in df.iloc[:, 1].astype(str).values:
+                        membership.append({"index_code": idx_code, "index_name": idx_name})
+            except Exception:
+                pass
+        return {"membership": membership, "count": len(membership), "source": "adata"} if membership else None
+    except Exception:
+        return None
+
+
+def _adata_concept_ths(symbol: str) -> Optional[Dict]:
+    """adata 同花顺概念板块"""
+    try:
+        import adata
+        df = adata.stock.info.get_concept_ths(stock_code=symbol)
+        if df is None or df.empty:
+            return None
+        rows = df.to_dict('records')
+        return {"rows": rows, "count": len(rows), "source": "adata_ths"}
+    except Exception:
+        return None
+
+
+def _adata_hot_concept() -> Optional[Dict]:
+    """adata 同花顺热门概念TOP20（市场情绪）"""
+    try:
+        import adata
+        df = adata.sentiment.hot.hot_concept_20_ths()
+        if df is None or df.empty:
+            return None
+        for col in df.columns:
+            if hasattr(df[col].dtype, 'tz') or str(df[col].dtype).startswith('datetime'):
+                df[col] = df[col].astype(str)
+        rows = df.to_dict('records')
+        return {"rows": rows, "count": len(rows), "source": "adata_ths"}
+    except Exception:
+        return None
+
+
+def _adata_hot_rank() -> Optional[Dict]:
+    """adata 同花顺热门股TOP100（市场热度）"""
+    try:
+        import adata
+        df = adata.sentiment.hot.hot_rank_100_ths()
+        if df is None or df.empty:
+            return None
+        for col in df.columns:
+            if hasattr(df[col].dtype, 'tz') or str(df[col].dtype).startswith('datetime'):
+                df[col] = df[col].astype(str)
+        rows = df.to_dict('records')
+        return {"rows": rows, "count": len(rows), "source": "adata_ths"}
+    except Exception:
+        return None
+
+
+def _adata_market_five(symbol: str) -> Optional[Dict]:
+    """adata 五档盘口"""
+    try:
+        import adata
+        df = adata.stock.market.get_market_five(stock_code=symbol)
+        if df is None or df.empty:
+            return None
+        rows = df.to_dict('records')
+        return {"rows": rows, "count": len(rows), "source": "adata"}
+    except Exception:
+        return None
+
+
+def _adata_north_flow_current() -> Optional[Dict]:
+    """adata 北向资金实时"""
+    try:
+        import adata
+        df = adata.sentiment.north.north_flow_current()
+        if df is None or df.empty:
+            return None
+        # 转换 Timestamp 为字符串
+        for col in df.columns:
+            if hasattr(df[col].dtype, 'tz') or str(df[col].dtype).startswith('datetime'):
+                df[col] = df[col].astype(str)
+        rows = df.to_dict('records')
+        latest = rows[-1] if rows else {}
+        return {
+            "summary": {
+                "latest_time": str(latest.get("trade_time", "")),
+                "net_hgt": latest.get("net_hgt"),
+                "net_sgt": latest.get("net_sgt"),
+                "net_tgt": latest.get("net_tgt"),
+            },
+            "rows": rows,
+            "count": len(rows),
+            "source": "adata"
+        }
+    except Exception:
+        return None
+
+
+def _adata_daily_movers() -> Optional[Dict]:
+    """adata 每日异动股列表"""
+    try:
+        import adata
+        df = adata.sentiment.hot.list_a_list_daily()
+        if df is None or df.empty:
+            return None
+        # 转换 Timestamp 为字符串
+        for col in df.columns:
+            if hasattr(df[col].dtype, 'tz') or str(df[col].dtype).startswith('datetime'):
+                df[col] = df[col].astype(str)
+        rows = df.to_dict('records')
+        return {"rows": rows, "count": len(rows), "source": "adata"}
+    except Exception:
+        return None
+
+
+def _baostock_rates() -> Optional[Dict]:
+    """baostock 贷款/存款利率（宏观补充）"""
+    import baostock as bs
+    old_stdout = sys.stdout
+    devnull = open(os.devnull, 'w')
+    try:
+        sys.stdout = devnull; bs.login(); sys.stdout = old_stdout
+        # 贷款利率
+        loan_rows = []
+        rs = bs.query_loan_rate_data(start_date='2023-01-01', end_date='2027-01-01')
+        while rs.next():
+            vals = rs.get_row_data()
+            if vals and len(vals) >= 8:
+                loan_rows.append({
+                    "pub_date": vals[0], "rate_6m": vals[1], "rate_1y": vals[2],
+                    "rate_1_3y": vals[3], "rate_3_5y": vals[4], "rate_above_5y": vals[5],
+                })
+        # 存款利率
+        deposit_rows = []
+        rs2 = bs.query_deposit_rate_data(start_date='2023-01-01', end_date='2027-01-01')
+        while rs2.next():
+            vals = rs2.get_row_data()
+            if vals and len(vals) >= 9:
+                deposit_rows.append({
+                    "pub_date": vals[0], "demand": vals[1], "fixed_3m": vals[2],
+                    "fixed_6m": vals[3], "fixed_1y": vals[4], "fixed_2y": vals[5],
+                    "fixed_3y": vals[6], "fixed_5y": vals[7],
+                })
+        sys.stdout = devnull; bs.logout(); sys.stdout = old_stdout
+        if not loan_rows and not deposit_rows:
+            return None
+        return {
+            "loan": {"rows": loan_rows[-10:], "count": len(loan_rows)},
+            "deposit": {"rows": deposit_rows[-10:], "count": len(deposit_rows)},
+            "source": "baostock"
+        }
+    except Exception:
+        try: sys.stdout = devnull; bs.logout()
+        except: pass
+        sys.stdout = old_stdout
+        return None
+    finally:
+        try: sys.stdout = old_stdout
+        except: pass
+        try: devnull.close()
+        except: pass
+
+
+def fetch_comprehensive(symbol: str) -> Dict:
+    """综合财务画像：adata财务核心 + baostock预告/快报/营运 + 股本结构 + 概念板块
+    + 板块归属 + 北向资金 + 解禁数据 + 人气排名 + 指数成分
+    + 同花顺概念 + 热门概念 + 热门股 + 五档盘口 + 北向实时 + 每日异动 + 利率
+    一次调用获取公司分析所需的大部分量化数据（v3.9: 18个数据源）。
+    """
+    results, errors = {}, []
+
+    # 1) adata 财务核心指标（43列×多年）
+    a = _adata_financial(symbol)
+    if a: results["adata_finance"] = a
+    else: errors.append("adata finance 无数据")
+
+    # 2) baostock 业绩预告
+    f = _baostock_forecast(symbol)
+    if f: results["forecast"] = f
+    else: errors.append("baostock forecast 无数据")
+
+    # 3) baostock 业绩快报
+    e = _baostock_express(symbol)
+    if e: results["express"] = e
+    else: errors.append("baostock express 无数据")
+
+    # 4) baostock 营运能力
+    o = _baostock_operation(symbol)
+    if o: results["operation"] = o
+    else: errors.append("baostock operation 无数据")
+
+    # 5) adata 股本结构
+    s = _adata_shares(symbol)
+    if s: results["shares"] = s
+    else: errors.append("adata shares 无数据")
+
+    # 6) adata 概念板块（东方财富）
+    c = _adata_concept(symbol)
+    if c: results["concept"] = c
+    else: errors.append("adata concept 无数据")
+
+    # 7) adata 行业/板块归属
+    pl = _adata_plate(symbol)
+    if pl: results["plate"] = pl
+    else: errors.append("adata plate 无数据")
+
+    # 8) adata 北向资金30日（全局数据）
+    nf = _adata_north_flow()
+    if nf: results["north_flow"] = nf
+    else: errors.append("adata north_flow 无数据")
+
+    # 9) adata 当月解禁股（全局数据）
+    sl = _adata_stock_lifting()
+    if sl: results["stock_lifting"] = sl
+    else: errors.append("adata stock_lifting 无数据")
+
+    # 10) adata 人气排名
+    pop = _adata_popularity()
+    if pop: results["popularity"] = pop
+    else: errors.append("adata popularity 无数据")
+
+    # 11) adata 指数成分股
+    idx = _adata_index_membership(symbol)
+    if idx: results["index_membership"] = idx
+    else: errors.append("adata index_membership 无数据（未纳入主要指数）")
+
+    # 12) adata 同花顺概念（v3.9新增）
+    ct = _adata_concept_ths(symbol)
+    if ct: results["concept_ths"] = ct
+    else: errors.append("adata concept_ths 无数据")
+
+    # 13) adata 同花顺热门概念TOP20（v3.9新增，全局市场情绪）
+    hc = _adata_hot_concept()
+    if hc: results["hot_concept"] = hc
+    else: errors.append("adata hot_concept 无数据")
+
+    # 14) adata 同花顺热门股TOP100（v3.9新增）
+    hr = _adata_hot_rank()
+    if hr: results["hot_rank"] = hr
+    else: errors.append("adata hot_rank 无数据")
+
+    # 15) adata 五档盘口（v3.9新增）
+    mf = _adata_market_five(symbol)
+    if mf: results["market_five"] = mf
+    else: errors.append("adata market_five 无数据")
+
+    # 16) adata 北向资金实时（v3.9新增）
+    nfc = _adata_north_flow_current()
+    if nfc: results["north_flow_current"] = nfc
+    else: errors.append("adata north_flow_current 无数据")
+
+    # 17) adata 每日异动股（v3.9新增）
+    dm = _adata_daily_movers()
+    if dm: results["daily_movers"] = dm
+    else: errors.append("adata daily_movers 无数据")
+
+    # 18) baostock 贷款/存款利率（v3.9新增，宏观补充）
+    rt = _baostock_rates()
+    if rt: results["rates"] = rt
+    else: errors.append("baostock rates 无数据")
+
+    return {"results": results, "errors": errors}
+
+
+# ═══════════════════════════════ 引擎 11: adata 资金流向 ═══════════════
+def fetch_capital_flow(symbol: str) -> Dict:
+    """资金流向：主力/大单/中单/小单/超大单净流入"""
+    try:
+        import adata
+        df = adata.stock.market.get_capital_flow(stock_code=symbol)
+        if df is None or df.empty:
+            return {"results": {}, "errors": ["adata capital_flow 无数据"]}
+        # 只保留最近30天
+        df = df.sort_values('trade_date').tail(30)
+        rows = df.to_dict('records')
+        # 提取最新一天摘要
+        latest = rows[-1] if rows else {}
+        return {
+            "results": {
+                "adata": {
+                    "summary": {
+                        "latest_date": latest.get("trade_date"),
+                        "main_net_inflow": latest.get("main_net_inflow"),
+                        "sm_net_inflow": latest.get("sm_net_inflow"),
+                        "mid_net_inflow": latest.get("mid_net_inflow"),
+                        "lg_net_inflow": latest.get("lg_net_inflow"),
+                        "max_net_inflow": latest.get("max_net_inflow"),
+                    },
+                    "rows": rows,
+                    "count": len(rows),
+                }
+            },
+            "errors": []
+        }
+    except Exception as e:
+        return {"results": {}, "errors": [f"adata: {str(e)[:60]}"]}
+
+
 def fetch_forex(symbol: str) -> Dict:
     """外汇行情 — 首选 Jin10 MCP（Agent 侧调用 mcp_jin10_get_quote），yfinance 为脚本兜底"""
     results, errors = {}, []
@@ -778,7 +1531,10 @@ def _schema_json() -> str:
         "categories": {
             "quote": {"markets": ["A","HK"], "description": "实时行情（7引擎5独立源）"},
             "kline": {"markets": ["A"], "description": "历史K线（Baostock）", "params": ["start","end","freq"]},
-            "financial": {"markets": ["A"], "description": "财务报表（Baostock）"},
+            "financial": {"markets": ["A"], "description": "5年多维财务报表（profit+balance+cashflow+dupont+growth+dividend）"},
+            "profile": {"markets": ["A"], "description": "公司概况（基本信息+行业分类+最近4季财务摘要）"},
+            "comprehensive": {"markets": ["A"], "description": "综合财务画像v3.9（18源：adata财务43列+baostock预告/快报/营运+股本+概念(东财+同花顺)+板块+北向资金(30日+实时)+解禁+人气+指数成分+热门概念+热门股+五档盘口+每日异动+利率）"},
+            "capital_flow": {"markets": ["A"], "description": "资金流向（主力/大单/中单/小单/超大单，最近30天）"},
             "forex": {"description": "外汇行情（Jin10 MCP 首选，yfinance 兜底）"},
             "futures": {"description": "期货合约（新浪+AkShare）"},
             "fund": {"description": "ETF规模（AkShare）"},
@@ -845,7 +1601,7 @@ MARKET = _market_now()
 def main():
     t_start = datetime.now()
     p = argparse.ArgumentParser("jw-investment-data v3.0")
-    p.add_argument("--category", choices=["quote","kline","financial","macro","forex","futures","fund"])
+    p.add_argument("--category", choices=["quote","kline","financial","profile","comprehensive","capital_flow","macro","forex","futures","fund"])
     p.add_argument("--symbol"); p.add_argument("--market", default="A")
     p.add_argument("--start"); p.add_argument("--end"); p.add_argument("--freq", default="daily")
     p.add_argument("--save"); p.add_argument("--proxy")
@@ -882,6 +1638,9 @@ def main():
             data = fetch_a_quote(sym, force_cache=args.force) if mkt=="A" else fetch_hk_quote(sym) if mkt=="HK" else {"error":f"不支持market={mkt}"}
         elif cat == "kline" and mkt == "A": data = fetch_a_kline(sym, s or "2026-01-01", e)
         elif cat == "financial": data = fetch_financial(sym)
+        elif cat == "profile": data = fetch_profile(sym)
+        elif cat == "comprehensive": data = fetch_comprehensive(sym)
+        elif cat == "capital_flow": data = fetch_capital_flow(sym)
         elif cat == "forex": data = fetch_forex(sym)
         elif cat == "macro": data = fetch_macro(sym)
         elif cat == "futures": data = fetch_futures(sym)

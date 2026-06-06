@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# -*- coding: utf-8 -*-
 """
 Markdown to PDF converter with beautiful formatting for research reports.
 Based on WeasyPrint with custom CSS styling.

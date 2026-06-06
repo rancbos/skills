@@ -86,6 +86,45 @@ tk = yfinance.Ticker("AAPL", session=session)
 - GDP 总量字段叫 `DOMESTICL_PRODUCT_BASE`（拼写错误保留在 API 中，`DOMESTICL` 缺少 A）
 - M2 接口 `RPT_ECONOMY_MONEY` 返回的字段名可能不包含 `M2_SAME`——已验证不可用
 
+## 2026-06-05 新增陷阱
+
+### jw-data 参数解析 Bug（ARGS索引错误）
+
+**症状**: `jw-data quote 000792` 报错 "❌ 缺少股票代码，如: jw-data quote 600519"，即使参数格式正确。
+
+**根因**: `jw-data` 脚本中 `SYMBOL="${ARGS[2]:-}"` 索引错误。脚本参数布局为 `CMD SUB SYMBOL EXTRA`（4个位置），但 `quote` 命令只传2个参数（`quote 600519`），股票代码实际在 `ARGS[1]` 而非 `ARGS[2]`。
+
+**修复**: 修改 `jw-data` 第43行：
+```bash
+# 修复前
+SYMBOL="${ARGS[2]:-}"
+# 修复后
+SYMBOL="${ARGS[1]:-}"
+```
+
+**影响范围**: 修复后 `quote`/`kline`/`indicators`/`chart`/`financial` 等需要股票代码的命令均正常工作。
+
+**验证方法**: `jw-data quote 000792` 应返回JSON格式行情数据（3源验证一致）。
+
+## 2026-06-01 新增陷阱
+
+### 脚本编码错误（python vs python3）
+
+**症状**: `SyntaxError: Non-ASCII character '\xe7' in file fetch_market_data.py on line 4, but no encoding declared`
+**根因**: 系统 `python` 可能指向 Python 2（不支持中文字符），脚本包含中文注释。
+**修复**: 必须使用 `python3` 而非 `python` 运行脚本。`python3 fetch_market_data.py ...`
+
+### 指数代码不支持（quote 类型）
+
+**症状**: `--symbol 000001` 返回平安银行（¥10.99），不是上证指数。`--symbol sh000001` 返回"无数据"。
+**根因**: `fetch_market_data.py` 的 quote 类型只支持个股代码，不支持指数代码（000001/399001/399006 等）。
+**影响**: 指数行情无法通过 `fetch_market_data.py --category quote` 获取。
+**解决方案**: 指数行情必须通过 web search（`mcp_minimax_search_web_search` 或 `mcp_tavily_tavily_search`）获取，或通过腾讯 HTTP 直接请求指数代码（如 `sh000001`、`sz399001`）。
+
+### K线和技术指标对指数的支持
+
+**待验证**: `fetch_market_data.py --category kline` 和 `technical_indicators.py` 对指数代码的支持情况未确认。如指数 K 线不可用，同样降级为 web search。
+
 ## 版本号一致性检查（v3.5.0）
 
 脚本应统一使用 `__version__` 变量（而非 `VERSION`），且与 SKILL.md frontmatter 中的 `version` 字段一致。v3.5.0 状态：

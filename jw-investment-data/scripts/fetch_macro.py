@@ -4,7 +4,7 @@ fetch_macro.py — 宏观数据采集引擎 v3.4
 ═══════════════════════════════════════════
 
 数据源:
-  东方财富 API  ─→ CPI/PMI/GDP/PPI（免费、无认证、直连JSON）
+  东方财富 API  ─→ CPI/PMI/GDP/PPI/固投/工业增加值/财政收入（免费、无认证）
   Baostock      ─→ M0/M1/M2/存贷利率/准备金率
   中国货币网     ─→ LPR 1Y/5Y
   世界银行 API   ─→ 中美GDP/CPI年度背景
@@ -12,7 +12,8 @@ fetch_macro.py — 宏观数据采集引擎 v3.4
 
 交叉验证:
   M2: Baostock vs 东方财富 RPT_ECONOMY_MONEY，差异≤3%通过
-  CPI/PMI/GDP: 单源(东方财富)，标注待第二源确认
+  CPI/PMI/GDP: 东方财富 + Jin10日历交叉验证(Agent侧)
+  固投/工业增加值: 东方财富 + Jin10新闻交叉验证(Agent侧)
 
 输出: JSON (标准信封) 或 Markdown (人读)
   错误聚合: 末尾报告各数据源成功/失败状态
@@ -39,7 +40,7 @@ _SCRIPT_DIR = Path(__file__).parent
 sys.path.insert(0, str(_SCRIPT_DIR))
 from format_macro import format_macro as _format_markdown
 
-__version__ = "3.4.1"
+__version__ = "3.5.0"
 CACHE_DIR = os.path.expanduser("~/.hermes/cache/jw-investment-data/macro")
 os.makedirs(CACHE_DIR, exist_ok=True)
 
@@ -204,6 +205,64 @@ def _em_gdp() -> Optional[Dict]:
         "time_series": [
             {"period": r["TIME"], "amount": r.get("DOMESTICL_PRODUCT_BASE"), "yoy": r.get("SUM_SAME")}
             for r in rows
+        ]
+    }
+
+
+def _em_fixed_invest() -> Optional[Dict]:
+    """固定资产投资（累计同比）"""
+    rows = _em_fetch("RPT_ECONOMY_ASSET_INVEST", page_size=5)
+    if not rows: return None
+    latest = rows[0]
+    prev = rows[1] if len(rows) > 1 else latest
+    return {
+        "period": latest["REPORT_DATE"][:7],
+        "invest_amount": latest.get("BASE"),           # 累计金额(亿)
+        "invest_yoy": latest.get("BASE_SAME"),         # 累计同比%
+        "invest_accumulate": latest.get("BASE_ACCUMULATE"),
+        "prev_yoy": prev.get("BASE_SAME"),
+        "source": "eastmoney",
+        "time_series": [
+            {"period": r["REPORT_DATE"][:7], "amount": r.get("BASE"), "yoy": r.get("BASE_SAME")}
+            for r in rows[:6]
+        ]
+    }
+
+
+def _em_industrial_output() -> Optional[Dict]:
+    """工业增加值（当月同比）"""
+    rows = _em_fetch("RPT_ECONOMY_INDUS_GROW", page_size=5)
+    if not rows: return None
+    latest = rows[0]
+    prev = rows[1] if len(rows) > 1 else latest
+    return {
+        "period": latest["REPORT_DATE"][:7],
+        "ind_yoy": latest.get("BASE_SAME"),             # 当月同比%
+        "ind_accumulate": latest.get("BASE_ACCUMULATE"), # 累计同比%
+        "prev_yoy": prev.get("BASE_SAME"),
+        "source": "eastmoney",
+        "time_series": [
+            {"period": r["REPORT_DATE"][:7], "yoy": r.get("BASE_SAME"), "accumulate": r.get("BASE_ACCUMULATE")}
+            for r in rows[:6]
+        ]
+    }
+
+
+def _em_fiscal_revenue() -> Optional[Dict]:
+    """财政收入（累计同比）"""
+    rows = _em_fetch("RPT_ECONOMY_INCOME", page_size=5)
+    if not rows: return None
+    latest = rows[0]
+    prev = rows[1] if len(rows) > 1 else latest
+    return {
+        "period": latest["REPORT_DATE"][:7],
+        "fiscal_amount": latest.get("BASE"),            # 累计金额(亿)
+        "fiscal_yoy": latest.get("BASE_SAME"),          # 累计同比%
+        "prev_yoy": prev.get("BASE_SAME"),
+        "source": "eastmoney",
+        "time_series": [
+            {"period": r["REPORT_DATE"][:7], "amount": r.get("BASE"), "yoy": r.get("BASE_SAME")}
+            for r in rows[:6]
         ]
     }
 
@@ -422,10 +481,12 @@ def _schema_json() -> str:
             "rates": "存贷利率", "lpr": "LPR",
             "cpi": "CPI", "ppi": "PPI", "pmi": "PMI", "gdp": "GDP",
             "growth": "经济增长(GDP+PMI)", "inflation": "通胀(CPI+PPI)",
+            "invest": "固定资产投资", "industrial": "工业增加值",
+            "fiscal": "财政收入", "real_activity": "实体经济(固投+工业+财政)",
             "calendar": "经济日历(Jin10 MCP)", "reserve": "准备金率",
         },
         "data_sources": {
-            "eastmoney": "✅ CPI/PMI/GDP/PPI/M2 (免费JSON API)",
+            "eastmoney": "✅ CPI/PMI/GDP/PPI/固投/工业增加值/财政收入 (免费JSON API)",
             "baostock": "✅ M0/M1/M2/利率/准备金率 (免费)",
             "chinamoney": "✅ LPR 1Y/5Y (免费JSON API)",
             "worldbank": "✅ 中美GDP/CPI年度背景 (免费JSON API)",
@@ -447,7 +508,8 @@ def main():
     p = argparse.ArgumentParser(f"fetch_macro v{__version__}")
     p.add_argument("--category", default="all",
                    choices=["all", "money", "rates", "lpr", "cpi", "ppi", "pmi", "gdp",
-                            "growth", "inflation", "reserve", "calendar"])
+                            "growth", "inflation", "reserve", "calendar",
+                            "invest", "industrial", "fiscal", "real_activity"])
     p.add_argument("--format", default="json", choices=["json", "markdown"])
     p.add_argument("--force", action="store_true")
     p.add_argument("--schema", action="store_true")
@@ -522,6 +584,46 @@ def main():
             else:
                 _record_error("eastmoney", "GDP 获取失败")
         if gdp: data["gdp"] = gdp
+
+    # ── 新增: 固定资产投资/工业增加值/财政收入 ──
+    if _should_fetch("invest") or _should_fetch("real_activity"):
+        invest = None if force else _cache_get("invest", "latest")
+        if not invest:
+            raw = _em_fixed_invest()
+            if raw:
+                invest = raw
+                _cache_set("invest", "latest",
+                           {"period": raw["period"], "invest_yoy": raw["invest_yoy"],
+                            "source": "eastmoney", "verified": True})
+            else:
+                _record_error("eastmoney", "固定资产投资 获取失败")
+        if invest: data["fixed_invest"] = invest
+
+    if _should_fetch("industrial") or _should_fetch("real_activity"):
+        ind = None if force else _cache_get("industrial", "latest")
+        if not ind:
+            raw = _em_industrial_output()
+            if raw:
+                ind = raw
+                _cache_set("industrial", "latest",
+                           {"period": raw["period"], "ind_yoy": raw["ind_yoy"],
+                            "source": "eastmoney", "verified": True})
+            else:
+                _record_error("eastmoney", "工业增加值 获取失败")
+        if ind: data["industrial_output"] = ind
+
+    if _should_fetch("fiscal") or _should_fetch("real_activity"):
+        fiscal = None if force else _cache_get("fiscal", "latest")
+        if not fiscal:
+            raw = _em_fiscal_revenue()
+            if raw:
+                fiscal = raw
+                _cache_set("fiscal", "latest",
+                           {"period": raw["period"], "fiscal_yoy": raw["fiscal_yoy"],
+                            "source": "eastmoney", "verified": True})
+            else:
+                _record_error("eastmoney", "财政收入 获取失败")
+        if fiscal: data["fiscal_revenue"] = fiscal
 
     # ★ 东方财富 M2 — 作为 Baostock M2 的第二源交叉验证
     def _em_m2() -> Optional[Dict]:

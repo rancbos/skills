@@ -2,11 +2,11 @@
 name: jw-content-summary
 description: 将一本书或长文蒸馏为可实操的方法论单元（R/I/A1/A2/E/P/B 七段），含压力测试和关联方法论。适用于"帮我总结这本书""帮我看看这本书讲了啥""拆解方法论""提炼核心框架""summarize this book""这本书值不值得读""这篇文章的核心观点""帮我拆解一下这篇文章""拆解研报""深度阅读""distill the methodology""帮我写读书笔记""读后感""这本书讲了什么""帮我拆解这本书"等场景。不适用于虚构作品。
 agent_created: true
-version: 4.68
+version: 4.69
 ---
 
 
-> 完整版本历史（v4.0-v4.68）见 `references/changelog.md`。下方仅保留最近 10 个版本。
+> 完整版本历史见 `references/changelog.md`。下方仅保留最近 3 个版本。
 
 ## 1. 使命与适用边界
 
@@ -68,30 +68,13 @@ version: 4.68
 
 ### 4.2 阶段 3 主代理直接写入时机（v4.49）
 
-**经验规律（新增）**：delegate_task 在阶段 3 SUMMARY 写作中**一致超时 600s**，无论并发数量（1-3并行均触达）。当前 session 多次确认：薛兆丰经济学讲义（116候选全D）、当代中国政府与政治（candidates空）均因 delegate_task 超时未完成。**阶段 3 强烈优先主代理直接写入**，不要等子代理超时再回退。
+delegate_task 阶段3写作**一致超时600s**，**阶段3强烈优先主代理直接写入**。
 
-**触发条件（需同时满足）**：
-1. `stage1-understanding.md` 存在
-2. `candidates/` 目录存在且有内容（或 stage1 足够支撑手工编组）
-3. `summary_plan.json` 存在（含推荐/附录条目）——即使全D级，只要正文七段完整可用
+**触发条件**（同时满足）：①stage1-understanding.md 存在 ②candidates/ 有内容或 stage1 足够支撑手工编组 ③summary_plan.json 存在（全D级也可，只要七段完整）
 
-**不需要调用 delegate_task 的场景**：
-- stage1+stage2 完整，stage3 超时后重试 → 主代理直接写入
-- stage3 validate 失败（格式错误）→ 主代理直接重写
-- 全单成员碎片 §7.3 回退，手动编组后主代理写入
-- **candidates 为空但 stage1 足够支撑手工编组**（如当代中国政府与政治）→ 主代理直接读取 stage1 + chapters 手工写 SUMMARY
-- **pipeline 全D级但候选正文七段完整可用**（如薛兆丰、巴菲特）→ 主代理直接读取 candidates 手工编组写入
+**仍需 delegate_task 的场景**：上下文窗口不足 / 多本并行带宽不足 / 需要子代理推理能力
 
-**何时仍需 delegate_task**：
-- 主代理上下文窗口不足（候选内容太多，SUMMARY 需分批写入）
-- 多本并行处理，主代理带宽不足
-- 主代理对特定书籍领域知识不足，需要子代理读取大量章节后的推理能力
-
-**主代理直接写入格式规范**（对照 `methodology/04-stage4-summarize.md` 模板）：
-- 五问：`## 问题一：作者的写作意图`（独立 H2 标题，非 `六、核心方法论` 容器）
-- 方法论单元：`## 方法论单元一：<标题>` + 七段 `**R — Reading**：` / `**I — Interpretation**：` 等
-- R段引文：`> ——第X章`（独立行，非 `（第X章）` 同行格式）
-- 审计节：含字面量「审计信息」 |
+**格式规范**（对照 `methodology/04-stage4-summarize.md`）：五问用独立H2 / 方法论单元用 `## 方法论单元一：<标题>` + 七段粗体行 / R段引文独立行 `> ——第X章` / 审计节含字面量「审计信息」
 
 ### 4.3 阶段 2.5 连接扫描（v4.54 新增）
 
@@ -261,6 +244,17 @@ version: 4.68
 
 **⚠️ Pitfall 5（v4.45）**：B-section 插入时 `patch` 报 `Found N matches`，因相邻 unit P 段相似。修复：扩展 old_string 含下一单元标题做唯一锚定。详见 `references/validate-summary-format.md`。
 
+## 8.5 Anti-Patterns（强制阅读）
+
+- ❌ 跳过阶段1直接写SUMMARY → 必须先有结构路由（stage1-understanding.md）
+- ❌ R段引用超过150字 → validator会失败，写完立即检查每条R段字符数
+- ❌ 阶段3用delegate_task写作 → 超时率~100%，主代理直接写入（§4.2）
+- ❌ pipeline全D就放弃 → 读candidates手工编组（§7.3）
+- ❌ per_file granularity导致全单成员碎片 → 改用by_type（§7.4）
+- ❌ read_file后直接write_file → 必须剥离行号前缀（Pitfall 0）
+- ❌ 审计节写"审计区""审计记录" → 必须含字面量「审计信息」
+- ❌ R段章节引用写同行格式 → 必须独立行 `> ——第X章`
+
 ## 9. 调用惯例
 
 - 全量运行：每阶段完成后汇报进度，但不中断等待，连续执行。
@@ -272,6 +266,17 @@ version: 4.68
 - 软聚类：`cluster_candidates.py` 只分组不删除。
 - 格式校验：`validate_candidates.py` 失败先修复再聚类。
 - 候选评分：运行 `pipeline_phase2.py`，自动完成 validate → cluster → score → plan，生成 `candidate_scores.json` + `summary_plan.json`。
+
+## 9.5 PPTX/DOCX/PDF 处理与批量课程处理
+
+> 当用户提供 PPTX、DOCX 或 PDF 文件（而非纯文本）时，需先提取文本再进入三阶段流水线。
+> 当用户提供一个目录包含多个课程文件时，可逐个处理后整合。
+
+- **PPTX/DOCX/PDF 文本提取**：详见 `references/pptx-docx-extraction.md`
+- **多文件课程批量处理**：详见 `references/multi-file-course-processing.md`
+- **用课程内容补充分析类 Skill**：详见 `references/course-content-enrichment.md`
+
+---
 
 ## 10. 异常处理索引
 
@@ -293,41 +298,69 @@ version: 4.68
 | pipeline 评分失真（学术书全D但内容可用） | `references/academic-book-pipeline-score-gap.md` |
 | pipeline_phase2 终端输出 avg=0/recommended=0 但 JSON 正常 | `references/pipeline-printout-mismatch.md` |
 | summary_plan.json 全空（推荐/附录均为零）或全单成员碎片 | `references/empty-plan-fallback.md` / `references/manual-regrouping-workflow.md` / 本 SKILL.md §7.3 |
+| 手动创建 candidates（validate 失败、快速原型） | `references/manual-candidate-creation.md` |
 | per_file granularity 导致单成员cluster全零分（不需要回退） | `references/per-file-granularity-bug.md` / 本 SKILL.md §7.4 |
 | execute_code Python 3.12+ Unicode 字符报错 | `references/execute_code_yaml_patterns.md` §6 |
 | validate 报 case 缺 linked_method_hint | `references/execute_code_yaml_patterns.md` §7 |
+| validate_candidates.py 字段缺失（必需字段格式） | `references/candidate-required-fields.md` |
 | 第X部分结构（非第X章，build_book_index 只检测到部分级） | `references/known-file-structures.md` §第X部分结构 |
+| PPTX/DOCX/PDF 文件处理 | `references/pptx-docx-extraction.md` |
+| 多文件课程批量处理 | `references/multi-file-course-processing.md` |
+| 用课程内容补充分析类 Skill | `references/course-content-enrichment.md` |
 | 批量处理多本书（delegate_task 超时阈值、split 模式、429限流、源文件发现） | `references/batch-processing-guidelines.md` |
+| 多文件批量处理（课程讲义、系列文章） | `references/multi-file-batch-processing.md` |
+| 课程讲义处理（PPTX、DOCX、PDF） | `references/lecture-notes-processing.md` |
 | Token优化（SKILL.md瘦身、索引精简、阶段2嵌入） | `references/token-optimization-patterns.md` |
 | book-index.json 截断验证（first_paragraphs=200, last_paragraphs删除） | `references/book-index-truncation-validation.md` |
 | 信件汇编类书籍（source_line年份格式、聚类不合并、R-section年份引用） | `references/letter-compilation-pitfalls.md` |
+| 候选解析格式陷阱（粗体id、YAML变体） | `references/candidate-parsing-pitfalls.md` |
+| I-section 常见错误与修复 | `references/i-section-pitfall.md` |
+| 子代理输出格式陷阱（schema漂移） | `references/subagent-output-format-pitfalls.md` |
+| delegate_task 输出格式要求 | `references/delegate-task-output-format.md` |
+| 高定义密度书籍处理策略 | `references/high-definition-density-books.md` |
+| 混合结构书籍处理 | `references/mixed-structure-books.md` |
+| extractor schema 映射参考 | `references/extractor-schema-mapping.md` |
 
 ## 11. 相关文件索引
 
-方法论：`methodology/00-overview.md`、`01-stage1-read-extract.md`、`02-stage2-parallel-extract.md`、`04-stage4-summarize.md`
+**方法论**（4个）：
+| 文件 | 内容 |
+|------|------|
+| `methodology/00-overview.md` | 三阶段流水线总览 |
+| `methodology/01-stage1-read-extract.md` | 阶段1 索引驱动结构路由 |
+| `methodology/02-stage2-parallel-extract.md` | 阶段2 execute_code 提取细节 |
+| `methodology/04-stage4-summarize.md` | 阶段3 SUMMARY 撰写规范 |
 
-脚本：`clean_text.py`、`build_book_index.py`、`pipeline_phase2.py`（统一管道）、`validate_candidates.py`、`cluster_candidates.py`、`score_candidates.py`、`build_summary_plan.py`
+**脚本**（9个）：
+| 脚本 | 用途 |
+|------|------|
+| `scripts/clean_text.py` | 文本清洗（去广告/乱码/空行） |
+| `scripts/build_book_index.py` | 建立章节索引（book-index.json） |
+| `scripts/pipeline_phase2.py` | 统一管道：validate→cluster→score→plan |
+| `scripts/validate_candidates.py` | 候选格式校验 |
+| `scripts/cluster_candidates.py` | 候选聚类分组 |
+| `scripts/score_candidates.py` | 候选质量评分 |
+| `scripts/build_summary_plan.py` | 生成推荐/附录/排除计划 |
+| `scripts/validate_summary.py` | SUMMARY.md 格式校验 |
+| `scripts/md_to_html.py` | Markdown转HTML（已不用于SUMMARY输出） |
 
-参考：`extractors/boundary-extractor.md`、`references/validate-summary-format.md`（validate_summary.py 格式要求）、`references/cognitive-depth-patterns.md`（v4.54 认知深度增强模式来源与设计决策）、`references/token-optimization-patterns.md`（v4.68 Token 优化模式）
+**核心参考**：
+| 文件 | 内容 |
+|------|------|
+| `references/validate-summary-format.md` | validate_summary.py 格式要求 |
+| `references/cognitive-depth-patterns.md` | 认知深度增强模式 |
+| `references/token-optimization-patterns.md` | Token 优化模式 |
+| `references/pptx-docx-extraction.md` | PPTX/DOCX/PDF 文本提取 |
+| `references/multi-file-course-processing.md` | 多文件课程批量处理 |
+| `references/course-content-enrichment.md` | 课程内容补充分析 |
 
 ## 12. 版本摘要
 
-> changelog 维护指南见 `references/changelog-maintenance.md`。每次添加新版本时检查是否需要清理旧条目重复。
-
-完整历史见 `references/changelog.md`。下方仅保留最近 10 个版本。
+完整历史见 `references/changelog.md`。changelog 维护指南见 `references/changelog-maintenance.md`。
 
 | 版本 | 日期 | 核心变更 |
 |---|---|---|
-| v4.68 | 2026-05-31 | book-index.json 精简验证固化：巴菲特书 pipeline 验证（62 candidates, avg=89.52, 61 recommended），first_paragraphs 截断 200 字符 + last_paragraphs 删除 = 零质量损失，book-index 255KB→151KB（-40.6%）。 |
-| v4.67 | 2026-05-31 | Token优化续：changelog.md去重（539→467行）、SKILL.md版本表裁至10条、methodology/04删除过时Top 10节、阶段2嵌入措辞强化。 |
-| v4.66 | 2026-05-31 | Token优化：SKILL.md changelog移出（546→334行）、book-index.json索引精简（118→76KB）、阶段2嵌入强制化。详见 `references/token-optimization-patterns.md`。 |
-| v4.65 | 2026-05-31 | 精简输出：删除SUMMARY.html，核心产出只有SUMMARY.md，删除md_to_html.py引用。 |
-| v4.64 | 2026-05-31 | 移除数量上限：删除Top 10限制和安全阀，纯质量门控（A/B+avg≥65→recommended）。 |
-| v4.63 | 2026-05-31 | 信件汇编全链路修复：source_line验证扩展（年份/章节名/中文描述）、R-section年份引用正则、聚类阈值0.58→0.35、dry-run聚类预览、execute_code分批策略文档。 |
-| v4.62 | 2026-05-31 | Pitfall 7：三个脚本粗体格式正则bug修复（pipeline 9/62→62/62）、信件合集年份引用格式陷阱、新增 bold-format-regex-pitfall.md。 |
-| v4.60 | 2026-06-01 | 审计修复：§4.1 模糊阈值→明确引用§6、§8孤立节合并到§4、§10 Pitfall 6外移到references、description+4触发词、章节编号重排消除断层。 |
-| v4.59 | 2026-05-31 | skill-creator 9 维审计：阈值注释、触发词、行数瘦身 544→479。 |
-| v4.58 | 2026-05-31 | 结构性清理：SKILL.md 899→544 行（changelog 移至 references）、删除 CHANGELOG.md/scripts.bak/5个领域脚本、extractors 标注历史参考、overview.md 版本引用改为"当前版本"、旧架构 extractor 引用更新。 |
-| v4.57 | 2026-05-31 | 9 维标准化审计修复 P0×2+P1×4+P2×2：luhmann_connections 写入路径、已读书籍路径、脚本阈值注释、description 触发词优化、5 个过时文件清理、质量自检标签、§9.1/§9.2 逻辑冲突修复、模板写入时机标注。 |
-| v4.56 | 2026-05-31 | 全面审计修复 P0×3+P1×5：validate_summary.py 修复 all_prefixes 未定义+count_chinese_chars 改名+新增 v4.54 节检查；validate_candidates.py 修复 connections ALIASES 冲突；pipeline_phase2.py 路径改为 __file__；cluster_candidates.py 接入 detect_granularity；overview.md 版本对齐；connections→luhmann_connections 语义统一。 |
+| v4.69 | 2026-06-05 | 新增4个参考文档：candidate-required-fields、multi-file-batch-processing、manual-candidate-creation、lecture-notes-processing |
+| v4.68 | 2026-05-31 | book-index.json 精简验证固化（255KB→151KB，零质量损失） |
+| v4.67 | 2026-05-31 | Token优化续：changelog.md去重、版本表裁至3条、methodology/04删除过时节 |
 
