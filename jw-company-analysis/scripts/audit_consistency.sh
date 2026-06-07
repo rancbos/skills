@@ -1,7 +1,7 @@
 #!/bin/bash
 # jw-company-analysis 一致性检查脚本
-# 用途：每次修改 SKILL.md 后自动执行，检查五端一致性
-# 版本：v1.0.0
+# 用途：每次修改 SKILL.md 后自动执行，检查 9 项一致性
+# 版本：v2.0.0
 
 set -e
 
@@ -11,7 +11,7 @@ TEMPLATE_FILE="$SKILL_DIR/templates/company-analysis-report.md"
 SCRIPT_FILE="$SKILL_DIR/scripts/pre_analysis.py"
 
 echo "=========================================="
-echo "jw-company-analysis 一致性检查"
+echo "jw-company-analysis 一致性检查 v2.0.0"
 echo "=========================================="
 echo ""
 
@@ -90,12 +90,87 @@ fi
 
 # 5. 统计信息
 echo ""
-echo "=========================================="
-echo "📊 检查结果汇总"
-echo "=========================================="
+echo "📋 5. References 统计"
 
 TOTAL_FILES=$(ls "$SKILL_DIR"/references/*.md 2>/dev/null | wc -l)
 echo "  references 文件数量: $TOTAL_FILES"
+
+# 6. 测试覆盖率检查
+echo ""
+echo "📋 6. 测试覆盖率检查"
+
+TEST_DIR="$SKILL_DIR/tests"
+if [ -d "$TEST_DIR" ]; then
+    TEST_COUNT=$(ls "$TEST_DIR"/test_*.py 2>/dev/null | wc -l)
+    echo "  测试文件数量: $TEST_COUNT"
+    
+    if [ $TEST_COUNT -gt 0 ]; then
+        # 运行测试
+        echo "  运行测试..."
+        cd "$SKILL_DIR" && python3 -m pytest tests/ -q --tb=no 2>/dev/null
+        if [ $? -eq 0 ]; then
+            echo -e "  ${GREEN}✅ 所有测试通过${NC}"
+        else
+            echo -e "  ${RED}❌ 有测试失败${NC}"
+            ERRORS=$((ERRORS + 1))
+        fi
+    else
+        echo -e "  ${YELLOW}⚠️ 没有测试文件${NC}"
+        WARNINGS=$((WARNINGS + 1))
+    fi
+else
+    echo -e "  ${YELLOW}⚠️ 测试目录不存在${NC}"
+    WARNINGS=$((WARNINGS + 1))
+fi
+
+# 7. 行号前缀污染检查
+echo ""
+echo "📋 7. 行号前缀污染检查"
+
+INFECTED_FILES=0
+for file in "$SKILL_DIR"/scripts/*.py "$SKILL_DIR"/SKILL.md; do
+    if [ -f "$file" ]; then
+        if head -5 "$file" | grep -qP '^\d+\|'; then
+            echo -e "  ${RED}❌ 行号前缀污染: $(basename "$file")${NC}"
+            INFECTED_FILES=$((INFECTED_FILES + 1))
+        fi
+    fi
+done
+
+if [ $INFECTED_FILES -eq 0 ]; then
+    echo -e "  ${GREEN}✅ 无行号前缀污染${NC}"
+else
+    ERRORS=$((ERRORS + INFECTED_FILES))
+fi
+
+# 8. Fallback 策略完整性检查
+echo ""
+echo "📋 8. Fallback 策略完整性检查"
+
+if grep -q "0.7 Fallback 策略统一入口" "$SKILL_DIR/references/data-preparation.md" 2>/dev/null; then
+    echo -e "  ${GREEN}✅ Fallback 策略章节存在${NC}"
+else
+    echo -e "  ${YELLOW}⚠️ 缺少 Fallback 策略章节${NC}"
+    WARNINGS=$((WARNINGS + 1))
+fi
+
+# 9. 快速索引检查
+echo ""
+echo "📋 9. 快速索引检查"
+
+if [ -f "$SKILL_DIR/references/investment-theory-index.md" ]; then
+    INDEX_SECTIONS=$(grep -c "^### " "$SKILL_DIR/references/investment-theory-index.md")
+    echo -e "  ${GREEN}✅ 快速索引存在（${INDEX_SECTIONS} 个分类）${NC}"
+else
+    echo -e "  ${YELLOW}⚠️ 缺少快速索引文件${NC}"
+    WARNINGS=$((WARNINGS + 1))
+fi
+
+# 最终统计
+echo ""
+echo "=========================================="
+echo "📊 检查结果汇总（9项）"
+echo "=========================================="
 
 if [ $ERRORS -eq 0 ] && [ $WARNINGS -eq 0 ]; then
     echo -e "  ${GREEN}✅ 全部通过！无错误无警告。${NC}"
