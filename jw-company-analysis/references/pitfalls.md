@@ -14,6 +14,7 @@
 - **脚本路径**：所有 rancbos-skills 下的脚本在 `~/.hermes/skills/rancbos-skills/` 下（不是 `~/.hermes/skills/`）。首次执行前验证：`python3 <script> --help`，报错说明路径或依赖问题。
 - **依赖安装**：首次执行需确认以下包已安装：`pip install akshare adata baostock efinance yfinance pandas matplotlib --break-system-packages -i https://pypi.tuna.tsinghua.edu.cn/simple`。七轨布林额外需要 numpy/matplotlib/pandas。缺少包会报 `No module named 'X'`。
 - **CHECKPOINT_DIR 权限**：默认 `/root/data/` 可能不可写（Permission denied）。如 `mkdir -p` 失败，fallback 到 `~/data/.checkpoints/`。报告输出同理 fallback 到 `~/data/`。
+- **⚠️ pre_analysis.py 权限修复（v3.63.4 已修补）**：`get_checkpoint_dir` 函数原来硬编码 `/root/data/.checkpoints/` 且无 fallback，会导致 PermissionError 崩溃。v3.63.4 已修补为优先尝试 `/root/data/`，失败则 fallback 到 `~/data/`。如果使用旧版本脚本，需手动 patch `get_checkpoint_dir` 函数添加 fallback 逻辑。
 - **pdf 提取 fallback**：当 jw-investment-data 脚本不可用时，可用 `pdftotext` 从本地研报/年报 PDF 提取结构化数据作为主数据源（非 web search），信源等级 🟢🟢（券商研报）或 🟢🟢🟢（年报）。
 - **baostock 不支持 ma/kdj 指标**：`jw-data indicators` 使用 baostock 后端，ma 和 kdj 会报 `未知指标` 错误。解决：用 baostock 手动计算 MA5/10/20/60 和 KDJ（K/D/J）。代码模式：`df['MA5'] = df['close'].rolling(5).mean()`，KDJ 用 RSV→EMA 计算。详见 `references/technical-analysis-guide.md`。
 - **fetch_all_data.py 超时**：统一数据获取入口脚本默认超时60秒，comprehensive 财务数据需要120秒。解决：直接使用各脚本分别获取（jw-data quote + fetch_market_data.py --category comprehensive + 7track_boll.py），或修改 fetch_all_data.py 超时常量。

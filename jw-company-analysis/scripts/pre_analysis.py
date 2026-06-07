@@ -31,9 +31,16 @@ def get_checkpoint_dir(symbol: str) -> Path:
     today = date.today().strftime("%Y%m%d")
     # 清理股票代码中的特殊字符用于目录名
     safe_symbol = symbol.replace(".", "_").replace("/", "_")
-    checkpoint_dir = Path(f"/root/data/.checkpoints/{safe_symbol}_{today}")
-    checkpoint_dir.mkdir(parents=True, exist_ok=True)
-    return checkpoint_dir
+    # 优先 /root/data/，不可写则 fallback 到 ~/data/
+    primary = Path(f"/root/data/.checkpoints/{safe_symbol}_{today}")
+    fallback = Path(f"{os.path.expanduser('~')}/data/.checkpoints/{safe_symbol}_{today}")
+    for d in [primary, fallback]:
+        try:
+            d.mkdir(parents=True, exist_ok=True)
+            return d
+        except PermissionError:
+            continue
+    raise PermissionError(f"无法创建检查点目录: {primary} 或 {fallback}")
 
 
 def run_script(cmd: list[str], timeout: int = 60) -> dict | None:
