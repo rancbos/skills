@@ -71,20 +71,23 @@ echo '{"last_step": N, "last_updated": "ISO时间", "status": "in_progress"}' > 
 
 **标准调用入口**：
 ```bash
-# A 股
-python ~/.hermes/skills/jw-investment-data/scripts/fetch_market_data.py --category quote --symbol 600519 --market A --format json
+# A 股（脚本在 rancbos-skills 目录下，不是 ~/.hermes/skills/jw-investment-data/）
+python ~/.hermes/skills/rancbos-skills/jw-investment-data/scripts/fetch_market_data.py --category quote --symbol 600519 --market A --format json
 # 港股
-python ~/.hermes/skills/jw-stock-value-analyzer/scripts/fetch_stock_data.py --symbol 0700.HK --market HK
+python ~/.hermes/skills/rancbos-skills/jw-stock-value-analyzer/scripts/fetch_stock_data.py --symbol 0700.HK --market HK
 # 美股
-python ~/.hermes/skills/jw-stock-value-analyzer/scripts/fetch_stock_data.py --symbol AAPL --market US
+python ~/.hermes/skills/rancbos-skills/jw-stock-value-analyzer/scripts/fetch_stock_data.py --symbol AAPL --market US
 ```
 
-**取数优先级（铁律）**：API优先 → 网页兜底（仅API失败时） → 冲突仲裁（交易所官方为准）
-
-**⚠️ 数据获取失败fallback**（三级降级）：
-1. **API正常** → 使用API数据（首选）
-2. **API失败** → web search 获取同一数据点，交叉验证后采用
-3. **web search也失败** → 使用最近一期公开财报数据 + 标注"数据截止日期"，在报告中说明数据时效性限制
+**🔧 环境验证**（首次执行必做）：
+- 检查 `~/.hermes/skills/rancbos-skills/jw-investment-data/scripts/fetch_market_data.py` 是否存在
+- 检查 `~/.hermes/skills/rancbos-skills/jw-stock-value-analyzer/scripts/fetch_stock_data.py` 是否存在
+- 如脚本不存在，fallback 到 web search 或 pdf 提取（Step 0.1 备源）
+- 验证脚本可执行：`python3 <script> --help` 成功返回（exit code 0）
+- 验证依赖安装：`pip list | grep -E 'yfinance|akshare|adata|baostock|pandas'` 至少包含核心依赖
+- **依赖安装命令**：`pip install akshare adata baostock efinance yfinance pandas matplotlib --break-system-packages -i https://pypi.tuna.tsinghua.edu.cn/simple`
+- **CHECKPOINT_DIR 权限**：默认 `/root/data/` 可能不可写。如 `mkdir -p` 失败，fallback 到 `~/data/.checkpoints/`，报告输出同理 fallback 到 `~/data/`。
+- **pdf 提取 fallback**：当 jw-investment-data 脚本不可用时，可用 `pdftotext` 从本地研报/年报 PDF 提取结构化数据作为主数据源，信源等级 🟢🟢（券商研报）或 🟢🟢🟢（年报）。`which pdftotext` 验证是否可用。
 4. **所有来源均失败** → 该数据项标注"⚠️数据缺失"，对应评分项给予保守分数（取区间下限），并在能力边界声明中说明
 
 **⚠️ 脚本参数注意**（Pitfall 3）：用 `--category quote --symbol 600519 --market A --format json`，不要用旧格式 `--code`。
