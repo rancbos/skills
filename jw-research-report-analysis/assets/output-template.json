@@ -1,0 +1,116 @@
+{
+  "report_summaries": [
+    {
+      "report_id": "report_001",
+      "source": {
+        "institution": "机构名称",
+        "analyst": "分析师姓名",
+        "publish_date": "YYYY-MM-DD",
+        "title": "报告标题"
+      },
+      "core_thesis": {
+        "viewpoint": "一句话核心观点",
+        "rating": "买入/增持/中性/减持/卖出",
+        "tone": {
+          "sentiment": "强烈看多/审慎看多/中性/审慎看空/强烈看空",
+          "confidence_level": "极度自信/较为确定/模棱两可/相当谨慎",
+          "evidence": "原文引用证据"
+        }
+      },
+      "hidden_assumptions": [
+        {
+          "assumption": "假设内容",
+          "dependency": "核心驱动/辅助条件/背景假设",
+          "fragility": "高/中/低",
+          "fragility_reason": "脆弱性判断依据"
+        }
+      ],
+      "expectation_gap": {
+        "market_consensus": "市场一致预期描述",
+        "report_stance": "强化共识/挑战共识/提出差异化视角",
+        "gap_detail": "分歧点描述",
+        "implication": "预期差收益或风险描述"
+      },
+      "key_arguments": [
+        {
+          "argument": "论据内容",
+          "evidence_type": "数据/逻辑推演/政策引用/行业调研",
+          "evidence_detail": "具体数据或事实"
+        }
+      ],
+      "catalysts": [
+        {
+          "catalyst": "催化剂描述",
+          "timeline": "时间窗口",
+          "potential_impact": "高/中/低"
+        }
+      ],
+      "risk_factors": [
+        {
+          "risk": "风险描述",
+          "likelihood": "高/中/低",
+          "impact_description": "影响描述"
+        }
+      ],
+      "verification_methods": [
+        {
+          "hypothesis": "待验证假设",
+          "method": "验证路径",
+          "data_source": "建议数据来源"
+        }
+      ],
+      "actionable_advice": {
+        "target_price": "",
+        "entry_point": "",
+        "position_sizing": "",
+        "stop_loss": "",
+        "investment_horizon": "",
+        "specific_strategy": ""
+      }
+    }
+  ],
+  "comparative_analysis": {
+    "consistency_analysis": [
+      {
+        "aspect": "共识维度",
+        "agreement_detail": "具体共识内容",
+        "supporting_reports": []
+      }
+    ],
+    "contradiction_identification": [
+      {
+        "aspect": "矛盾维度",
+        "viewpoint_a": {
+          "report_id": "",
+          "stance": ""
+        },
+        "viewpoint_b": {
+          "report_id": "",
+          "stance": ""
+        },
+        "root_cause_analysis": "分歧根源分类"
+      }
+    ],
+    "assumption_vulnerability_heatmap": [
+      {
+        "assumption": "共同依赖假设",
+        "shared_by": [],
+        "vulnerability_score": "高/中/低",
+        "sensitivity_analysis": "假设不成立的影响"
+      }
+    ],
+    "expectation_gap_matrix": [
+      {
+        "report_id": "",
+        "stance": "强化共识/挑战共识/差异化视角",
+        "gap_size": "显著/中等/微小",
+        "controversy_level": "高/中/低"
+      }
+    ],
+    "consensus_actionable_summary": {
+      "consensus_target": "目标价区间",
+      "consensus_position": "仓位建议共识",
+      "divergence_in_advice": "操作建议分歧"
+    }
+  }
+}
