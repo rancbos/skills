@@ -95,6 +95,7 @@ Step 5: 逆向检查安全阀（排除5.3 / 人工复核<−20）
   ↓
 Step 6: 技术面（建仓时机信号）
 > 📚技术分析指南详见 `references/technical-analysis-guide.md`
+📚银行股分析要点详见 `references/banking-stock-analysis.md`（指标体系+估值方法+特殊Pitfall+pdftotext提取命令）
   ↓
 Step 7: 综合评分与投资结论
   ↓
@@ -110,6 +111,7 @@ Step 8: 交卷前自检（强制后置）
 > 📚完整流程详见 `references/data-preparation.md`
 > **脚本路径**：所有 rancbos-skills 下的脚本在 `~/.hermes/skills/rancbos-skills/` 下（不是 `~/.hermes/skills/`）。📚详见 `references/script-commands.md`
 > 📚脚本调用详见 `references/script-commands.md`
+📚子Agent报告写作最佳实践详见 `references/subagent-report-writing.md`（委托模式+后处理检查清单+常见问题修复）
 > 📚超时常量详见 `references/timeout-config.md`
 > 📚Pitfall 详见 `references/pitfalls.md`
 
