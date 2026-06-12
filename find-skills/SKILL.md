@@ -158,7 +158,7 @@ When searching, consider these common categories:
 
 ## Pitfalls
 
-### Pitfall 0: npx skills add — symlinks may not land in Hermes directory
+### Pitfall0: npx skills add — symlinks may not land in Hermes directory
 
 `npx skills add` installs skills to `~/data/.agents/skills/` and reports "symlink → Hermes Agent", but the symlinks in `~/.hermes/skills/` may not actually be created. After any `npx skills add` run:
 
@@ -167,6 +167,40 @@ When searching, consider these common categories:
 3. Verify with `skills_list` that the skill appears
 
 To remove skills installed via npx: delete both the symlink (`~/.hermes/skills/<name>`) AND the source directory (`~/data/.agents/skills/<name>`).
+
+### Pitfall1: npx skills add is interactive — even with `--yes` / `--all`
+
+`npx skills add <repo> --skill <name> -y` still drops into an interactive "Which agents do you want to install to?" picker (multi-select with arrow keys + space + enter). `--all` and `-y` do NOT bypass this. The CLI's `--agent '*'` exists but only takes effect AFTER the picker completes, which can't happen in a non-pty shell call.
+
+**Symptom:** Command hangs at the "Additional agents" selection prompt in any non-interactive shell session (cron, agent tool calls, CI).
+
+**Fallback — direct git clone + copy (preferred when npx is blocked):**
+```bash
+#1. Shallow clone to /tmp
+git clone --depth=1 https://github.com/<owner>/<repo> /tmp/<repo>
+
+#2. Locate the skill directory inside the repo (typically repo/skills/<skill-name>/)
+ls /tmp/<repo>/skills/
+
+#3. Copy directly into Hermes skills
+mkdir -p ~/.hermes/skills/<skill-name>
+cp -r /tmp/<repo>/skills/<skill-name>/. ~/.hermes/skills/<skill-name>/
+
+#4. Verify
+ls ~/.hermes/skills/<skill-name>/
+# Should see: SKILL.md, possibly references/, scripts/, templates/, assets/
+```
+
+**When to use this fallback:**
+- `npx skills add` hangs in non-pty shell
+- Hermes Agent is not listed among the60+ agents npx skills targets
+- You only need ONE skill from a repo, not the whole ecosystem
+
+**Note:** Avoid `git clone --depth1` (with space) via `terminal()` — the tool collapses `--depth1` to `--depth1`, which git rejects. Always use `--depth=1` (equals form).
+
+### Pitfall2: No "Hermes" agent in npx skills' agent list
+
+`npx skills add` enumerates60+ target agents (Amp, Claude Code, Cursor, AiderDesk, etc.) but Hermes Agent is not among them. Even if you bypass the interactive picker, the install lands in `~/data/.agents/skills/` — not where Hermes reads from. The direct git clone + copy fallback (Pitfall1) is the only reliable way to install a skill into Hermes from an arbitrary GitHub repo.
 
 ## Tips for Effective Searches
 
